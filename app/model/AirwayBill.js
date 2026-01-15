@@ -1,0 +1,97 @@
+import mongoose from "mongoose";
+
+const AirwayBillSchema = new mongoose.Schema({
+  awbNo: { type: String, required: true },
+  referenceNo: { type: String, default: null },
+  date: {
+    type: Date,
+    default: null,
+    // optional: transform DD/MM/YYYY to Date
+    set: (val) => {
+      if (!val) return null;
+      const [day, month, year] = val.split("/");
+      return new Date(`${year}-${month}-${day}`);
+    },
+  },
+  origin: { type: String, default: "" },
+  sector: { type: String, default: "" },
+  destination: { type: String, default: "" },
+  code: { type: String, default: "" },
+  customer: { type: String, default: null },
+  accountBalance: { type: Number, default: null },
+  company: { type: String, default: null },
+  consignor: { type: String, default: "" },
+  "consignor-addressLine1": { type: String, default: "" },
+  "consignor-addressLine2": { type: String, default: "" },
+  "consignor-pincode": { type: String, default: "" },
+  "consignor-city": { type: String, default: "" },
+  "consignor-state": { type: String, default: "" },
+  "consignor-telephone": { type: String, default: "" },
+  "consignor-idType": { type: String, default: "" },
+  "consignor-idNumber": { type: String, default: "" },
+  "consignor-emailID": { type: String, default: "" },
+  consignee: { type: String, default: "" },
+  "consignee-addressLine1": { type: String, default: "" },
+  "consignee-addressLine2": { type: String, default: "" },
+  "consignee-city": { type: String, default: "" },
+  "consignee-state": { type: String, default: "" },
+  "consignee-zipcode": { type: String, default: "" },
+  "consignee-telephone": { type: String, default: "" },
+  network: { type: String, default: null },
+  networkName: { type: String, default: null },
+  service: { type: String, default: "" },
+  volWt: { type: Number, default: null },
+  volDisc: { type: Number, default: 0 }, // updated to match number input
+  goodsType: { type: String, default: "" },
+  pcs: { type: Number, default: null },
+  actualWt: { type: Number, default: null },
+  chargableWt: { type: Number, default: null },
+  payment: { type: String, default: "" },
+  currency: { type: String, default: "" },
+  invoiceValue: { type: Number, default: null },
+  content: { type: String, default: "" },
+  invoice: {
+    type: [String],
+    default: [],
+  },
+
+  operationRemark: { type: String, default: "" },
+  isHold: { type: Boolean, default: false },
+  holdReason: { type: String, default: "" },
+  otherHoldReason: { type: String, default: "" },
+  mawbNo: { type: String, default: null },
+  runNo: { type: String, default: null },
+  bag: { type: String, default: null },
+  clubNo: { type: String, default: null },
+  alMawb: { type: String, default: null },
+  flight: { type: String, default: null },
+  obc: { type: String, default: null },
+  automation: { type: Boolean, default: false },
+  handling: { type: Boolean, default: false },
+  csb: { type: Boolean, default: false },
+  commercialShipment: { type: Boolean, default: false },
+  billNo: { type: String, default: null },
+  manifestNo: { type: String, default: null },
+  basicAmount: { type: Number, default: null },
+  manualAmount: { type: Number, default: null },
+  cashRecvAmount: { type: Number, default: null },
+  balanceAmount: { type: Number, default: null },
+  handlingAmount: { type: Number, default: null },
+  miscChg: { type: Number, default: null },
+  miscChgReason: { type: String, default: null },
+  duty: { type: Number, default: null },
+  overWtHandling: { type: Number, default: null },
+  hikeAmt: { type: Number, default: null },
+  fuelPercentage: { type: Number, default: null },
+  fuelAmt: { type: Number, default: null },
+  discount: { type: Number, default: null },
+  sgst: { type: Number, default: null },
+  cgst: { type: Number, default: null },
+  igst: { type: Number, default: null },
+  grandTotal: { type: Number, default: null },
+});
+
+const AirwayBill =
+  mongoose.models.AirwayBill || mongoose.model("AirwayBill", AirwayBillSchema);
+
+export default AirwayBill;
