@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import connectDB from "@/app/lib/db"; // Database connection utility
-import Zone from "@/app/model/Zone"; // Zone model
+import connectDB from "@/app/lib/db";
+import Zone from "@/app/model/Zone";
 
 // Connect to the database
 await connectDB();
@@ -11,7 +11,6 @@ export async function POST(req) {
     const payload = await req.json();
     console.log("Received payload:", payload);
 
-    // Check if it's the new format with zones array and metadata
     if (payload.zones && Array.isArray(payload.zones)) {
       const {
         zones,
@@ -23,7 +22,6 @@ export async function POST(req) {
         unserviceableZones = []
       } = payload;
 
-      // Validate required fields
       if (!zoneTariff || !sector) {
         return NextResponse.json(
           { error: "Zone Tariff and Sector are required." },
@@ -31,10 +29,9 @@ export async function POST(req) {
         );
       }
 
-      // Prepare zones with metadata
       const zonesToInsert = zones.map(zone => ({
         ...zone,
-        zoneMatrix: zone.zoneMatrix || zoneTariff, // Use zoneTariff if not present
+        zoneMatrix: zone.zoneMatrix || zoneTariff,
         effectiveDateFrom: effectiveDateFrom ? new Date(effectiveDateFrom) : null,
         effectiveDateTo: effectiveDateTo ? new Date(effectiveDateTo) : null,
         remoteZones: remoteZones.length > 0 ? remoteZones : [],
@@ -43,7 +40,6 @@ export async function POST(req) {
 
       console.log("Zones to insert:", zonesToInsert);
 
-      // Insert zones into the database
       const createdZones = await Zone.insertMany(zonesToInsert);
 
       return NextResponse.json(
@@ -57,7 +53,6 @@ export async function POST(req) {
         { status: 201 }
       );
     }
-    // Fallback for old format (direct array)
     else if (Array.isArray(payload)) {
       const createdZones = await Zone.insertMany(payload);
       return NextResponse.json(
@@ -65,7 +60,6 @@ export async function POST(req) {
         { status: 201 }
       );
     }
-    // Invalid format
     else {
       return NextResponse.json(
         { error: "Invalid data format. Expected zones array with metadata." },
@@ -84,17 +78,14 @@ export async function POST(req) {
 // GET: Fetch zones (with filters if provided)
 export async function GET(req) {
   try {
-    // Extract query parameters from the request URL
     const url = new URL(req.url);
     const searchParams = url.searchParams;
 
-    // Create a filters object from query parameters
     const filters = {};
     searchParams.forEach((value, key) => {
       filters[key] = value;
     });
 
-    // Fetch zones based on the filters or fetch all if no filters
     const zones = await Zone.find(filters).sort({ createdAt: -1 });
     
     return NextResponse.json(
@@ -112,12 +103,13 @@ export async function GET(req) {
 }
 
 // PUT: Update a zone by ID
-export async function PUT(req, { params }) {
-  const { id } = params;
+export async function PUT(req) {
   try {
+    const url = new URL(req.url);
+    const id = url.pathname.split('/').pop();
+    
     const updateData = await req.json();
     
-    // Handle date conversions if present
     if (updateData.effectiveDateFrom) {
       updateData.effectiveDateFrom = new Date(updateData.effectiveDateFrom);
     }
@@ -146,9 +138,11 @@ export async function PUT(req, { params }) {
 }
 
 // DELETE: Delete a zone by ID
-export async function DELETE(req, { params }) {
-  const { id } = params;
+export async function DELETE(req) {
   try {
+    const url = new URL(req.url);
+    const id = url.pathname.split('/').pop();
+    
     const deletedZone = await Zone.findByIdAndDelete(id);
 
     if (!deletedZone) {
