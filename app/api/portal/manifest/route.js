@@ -12,7 +12,7 @@ export async function POST(req) {
   try {
     const body = await req.json();
     const { awbNumbers, pickupType, pickupAddress, accountCode } = body;
-    console.log(body);
+    console.log("POST manifest body:", body);
 
     if (!Array.isArray(awbNumbers) || awbNumbers.length === 0) {
       return NextResponse.json(
@@ -21,7 +21,7 @@ export async function POST(req) {
       );
     }
 
-    // Step 1: Check for already assigned shipments (existing logic)
+    // Step 1: Check for already assigned shipments
     const alreadyAssigned = await Shipment.find({
       awbNo: { $in: awbNumbers },
       manifestNumber: { $ne: null },
@@ -99,12 +99,12 @@ export async function POST(req) {
       }
     }
 
-    // Step 5: Generate new manifest number as: ACCOUNT-01, ACCOUNT-02 ...
+    // Step 5: Generate new manifest number
     const manifestNumber = `${accountCode}-${counter
       .toString()
       .padStart(2, "0")}`;
 
-
+    // Step 6: Create notification
     const notificationPayload = buildShipmentBookedNotification({
       accountCode: accountCode,
       type: "Manifest Requested",
@@ -115,7 +115,7 @@ export async function POST(req) {
 
     await new Notification(notificationPayload).save();
 
-    // Step 6: Create and save Manifest
+    // Step 7: Create and save Manifest
     const newManifest = new Manifest({
       manifestNumber,
       accountCode,
@@ -123,14 +123,22 @@ export async function POST(req) {
       pickupType,
       pickupAddress: pickupType === "pickup" ? pickupAddress : null,
       dropBranchDetails: pickupType === "drop" ? pickupAddress : null,
+      status: "pending",
     });
 
     await newManifest.save();
 
-    // Step 7: Update Shipment records with manifestNumber
+    // Step 8: Update Shipment records
+    const updateData = {
+      $set: {
+        manifestNo: manifestNumber,
+        status: "Manifest Created",
+      }
+    };
+
     await Shipment.updateMany(
       { awbNo: { $in: awbNumbers } },
-      { $set: { manifestNo: manifestNumber, status: "Manifest Created" } }
+      updateData
     );
 
     return NextResponse.json(
@@ -139,6 +147,7 @@ export async function POST(req) {
         manifestNumber,
         message: "Manifest created successfully.",
         awbCount: awbNumbers.length,
+        manifest: newManifest,
       },
       { status: 200 }
     );
@@ -163,7 +172,6 @@ export async function GET(req) {
       );
     }
 
-    // 1. Fetch the manifest
     const manifest = await Manifest.findOne({ manifestNumber });
 
     if (!manifest) {
@@ -173,16 +181,10 @@ export async function GET(req) {
       );
     }
 
-    // // 2. Fetch related shipments
-    // const shipments = await Shipment.find({
-    //   awbNo: { $in: manifest.awbNumbers },
-    // });
-
     return NextResponse.json(
       {
         success: true,
         manifest,
-        // shipments,
       },
       { status: 200 }
     );
@@ -199,6 +201,8 @@ export async function PUT(req) {
   try {
     const body = await req.json();
     const { manifestNumber, awbNumbers, pickupType, pickupAddress, status } = body;
+
+    console.log("PUT manifest update:", body);
 
     let manifest;
 
@@ -257,23 +261,35 @@ export async function PUT(req) {
       { new: true, runValidators: true }
     );
 
-    // ---- Update Shipment Status ----
-    if (awbNumbers && awbNumbers.length > 0) {
-      await Shipment.updateMany(
-        { awbNo: { $in: awbNumbers } },
-        { $set: { status: "Manifest Dispatched" } }
-      );
-    } else {
-      await Shipment.updateMany(
-        { manifestNo: manifestNumber },
-        { $set: { status: "Manifest Dispatched" } }
-      );
+    // Determine which AWB numbers to update
+    const awbsToUpdate = awbNumbers || manifest.awbNumbers;
+    
+    // Prepare shipment update data
+    const shipmentUpdateData = {
+      $set: {
+        status: "Manifest Dispatched",
+        manifestNo: manifestNumber || manifest.manifestNumber
+      }
+    };
+
+    // Add origin field if dropping at hub and branch code exists
+    if (pickupType === "drop" && pickupAddress) {
+      const branchCode = pickupAddress.code || pickupAddress.branchCode;
+      if (branchCode) {
+        shipmentUpdateData.$set.origin = branchCode;
+      }
     }
+
+    // Update Shipment records
+    await Shipment.updateMany(
+      { awbNo: { $in: awbsToUpdate } },
+      shipmentUpdateData
+    );
 
     return NextResponse.json(
       {
         success: true,
-        message: "Manifest updated successfully.",
+        message: "Manifest updated and shipments dispatched successfully.",
         manifest: updatedManifest,
       },
       { status: 200 }
@@ -287,4 +303,3 @@ export async function PUT(req) {
     );
   }
 }
-
