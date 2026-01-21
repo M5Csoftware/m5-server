@@ -1,3 +1,4 @@
+// app/api/portal/get-shipments/route.js
 import { NextResponse } from "next/server";
 import connectDB from "@/app/lib/db";
 import Shipment from "@/app/model/portal/Shipment";

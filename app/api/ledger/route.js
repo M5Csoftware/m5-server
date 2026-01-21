@@ -24,7 +24,7 @@ const RCPT_PAYMENTS = [
 ];
 
 const getSaleType = (payment) => {
-  if (payment === "Credit") return "Sale";
+  if (payment === "Credit" || payment === "" || !payment) return "Sale";
   if (RCPT_PAYMENTS.includes(payment)) return "RCPT";
   return payment; // show as-is
 };
@@ -41,27 +41,34 @@ export async function GET(req) {
     if (!accountCode) {
       return NextResponse.json(
         { success: false, message: "Missing accountCode" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const query = {
+    // Build base query
+    const baseQuery = {
       accountCode,
       $or: [
-        // ✅ ALWAYS include RCPT
+        // ✅ ALWAYS include RCPT payments
         { payment: { $in: RCPT_PAYMENTS } },
 
-        // ✅ SALES logic (Credit only)
-        includeHold
-          ? { payment: "Credit", isHold: true }
-          : {
-              payment: "Credit",
-              $or: [{ isHold: false }, { isHold: { $exists: false } }],
-            },
+        // ✅ Include Sales (Credit, empty string, or non-existent payment field)
+        { payment: "Credit" },
+        { payment: "" },
+        { payment: { $exists: false } },
       ],
     };
 
-    const entries = await AccountLedger.find(query).sort({ date: 1 });
+    // ✅ Apply hold filter only if checkbox is NOT checked
+    if (!includeHold) {
+      baseQuery.$and = [
+        {
+          $or: [{ isHold: false }, { isHold: { $exists: false } }],
+        },
+      ];
+    }
+
+    const entries = await AccountLedger.find(baseQuery).sort({ date: 1 });
 
     let runningBalance = openingBalance;
 
@@ -132,7 +139,7 @@ export async function GET(req) {
     console.error("Ledger error:", error);
     return NextResponse.json(
       { success: false, message: "Failed to fetch ledger" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -157,7 +164,7 @@ export async function POST(req) {
         message: "Account Ledger entry created successfully",
         data: newLedger,
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error("Error creating AccountLedger:", error);
@@ -167,7 +174,7 @@ export async function POST(req) {
         message: "Failed to create Account Ledger entry",
         error: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
