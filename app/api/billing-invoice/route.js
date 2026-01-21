@@ -21,7 +21,7 @@ export async function GET() {
     console.error("Error fetching next invoice sr no:", error);
     return NextResponse.json(
       { success: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -51,7 +51,7 @@ export async function POST(req) {
     if (!invoiceSrNo || !invoiceNumber) {
       return NextResponse.json(
         { success: false, message: "Missing invoiceSrNo or invoiceNumber" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -72,20 +72,19 @@ export async function POST(req) {
       totalAwb,
     };
 
-    // 🚫 Validate shipment eligibility before invoicing
+    // 🚫 Validate shipment eligibility before invoicing (removed bagNo validation)
     if (shipments && shipments.length > 0) {
       const awbNos = shipments.map((s) => s.awbNo).filter(Boolean);
 
       const invalidShipments = await Shipment.find({
         awbNo: { $in: awbNos },
-      }).select("awbNo runNo bagNo isHold");
+      }).select("awbNo runNo isHold");
 
       const reasons = [];
 
       invalidShipments.forEach((s) => {
-        if (s.isHold) reasons.push(`Shipment is on Hold `);
-        if (!s.runNo) reasons.push(`RunNo missing `);
-        if (!s.bagNo) reasons.push(`BagNo missing `);
+        if (s.isHold) reasons.push(`Shipment ${s.awbNo} is on Hold`);
+        if (!s.runNo) reasons.push(`Shipment ${s.awbNo} - RunNo missing`);
       });
 
       if (reasons.length > 0) {
@@ -95,7 +94,7 @@ export async function POST(req) {
             message: "Invoice cannot be created",
             reasons,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -115,20 +114,20 @@ export async function POST(req) {
               billingLocked: true,
               billNo: invoiceNumber,
             },
-          }
+          },
         );
       }
     }
 
     return NextResponse.json(
       { success: true, invoice: createdInvoice },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (err) {
     console.error("❌ DB Error:", err);
     return NextResponse.json(
       { success: false, message: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -143,7 +142,7 @@ export async function DELETE(req) {
     if (!invoiceNumber) {
       return NextResponse.json(
         { success: false, message: "Missing invoice number" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -152,7 +151,7 @@ export async function DELETE(req) {
     if (!invoice) {
       return NextResponse.json(
         { success: false, message: "Invoice not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -168,7 +167,7 @@ export async function DELETE(req) {
             isBilled: false,
             billNo: null,
           },
-        }
+        },
       );
     }
 
@@ -183,7 +182,7 @@ export async function DELETE(req) {
     console.error("❌ Delete error:", err);
     return NextResponse.json(
       { success: false, message: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
