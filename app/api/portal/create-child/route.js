@@ -172,17 +172,67 @@ export async function PUT(req) {
   }
 }
 
-// DELETE: Delete one child shipment by ID
+// DELETE: Delete one child shipment by childAwbNo
 export async function DELETE(req) {
   try {
     const body = await req.json();
-    const { _id } = body;
+    const { childAwbNo } = body;
 
-    if (!_id) throw new Error("Missing _id for deletion");
+    if (!childAwbNo) {
+      throw new Error("Missing childAwbNo for deletion");
+    }
 
-    const deleted = await ChildShipment.findByIdAndDelete(_id);
+    // Find the child shipment first to get masterAwbNo
+    const childShipment = await ChildShipment.findOne({ childAwbNo });
+    
+    if (!childShipment) {
+      throw new Error("Child shipment not found");
+    }
 
-    if (!deleted) throw new Error("Shipment not found");
+    const masterAwbNo = childShipment.masterAwbNo;
+
+    // Delete the child shipment
+    const deleted = await ChildShipment.findOneAndDelete({ childAwbNo });
+
+    // Update the master shipment to remove childNo from boxes and package details
+    const masterShipment = await Shipment.findOne({ awbNo: masterAwbNo });
+    
+    if (masterShipment) {
+      // Remove childNo from boxes
+      let updatedBoxes = masterShipment.boxes ? [...masterShipment.boxes] : [];
+      updatedBoxes = updatedBoxes.map(box => {
+        if (box.childNo === childAwbNo) {
+          const { childNo, ...boxWithoutChildNo } = box;
+          return boxWithoutChildNo;
+        }
+        return box;
+      });
+
+      // Remove childNo from shipmentAndPackageDetails
+      let updatedPackageDetails = { ...masterShipment.shipmentAndPackageDetails };
+      Object.keys(updatedPackageDetails).forEach(key => {
+        if (Array.isArray(updatedPackageDetails[key])) {
+          updatedPackageDetails[key] = updatedPackageDetails[key].map(item => {
+            if (item.childNo === childAwbNo) {
+              const { childNo, ...itemWithoutChildNo } = item;
+              return itemWithoutChildNo;
+            }
+            return item;
+          });
+        }
+      });
+
+      // Update master shipment
+      await Shipment.findOneAndUpdate(
+        { awbNo: masterAwbNo },
+        {
+          $set: {
+            boxes: updatedBoxes,
+            shipmentAndPackageDetails: updatedPackageDetails
+          }
+        }
+      );
+    }
 
     return NextResponse.json(
       { message: "Deleted", data: deleted },
