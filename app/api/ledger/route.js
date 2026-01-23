@@ -49,17 +49,13 @@ export async function GET(req) {
     const baseQuery = {
       accountCode,
       $or: [
-        // ✅ ALWAYS include RCPT payments
         { payment: { $in: RCPT_PAYMENTS } },
-
-        // ✅ Include Sales (Credit, empty string, or non-existent payment field)
         { payment: "Credit" },
         { payment: "" },
         { payment: { $exists: false } },
       ],
     };
 
-    // ✅ Apply hold filter only if checkbox is NOT checked
     if (!includeHold) {
       baseQuery.$and = [
         {
@@ -68,7 +64,28 @@ export async function GET(req) {
       ];
     }
 
-    const entries = await AccountLedger.find(baseQuery).sort({ date: 1 });
+    // Use aggregation to join with Shipments
+    const entries = await AccountLedger.aggregate([
+      {
+        $match: baseQuery,
+      },
+      {
+        $lookup: {
+          from: "shipments", // Your Shipments collection name
+          localField: "awbNo",
+          foreignField: "awbNo",
+          as: "shipmentDetails",
+        },
+      },
+      {
+        $addFields: {
+          shipmentDetail: { $arrayElemAt: ["$shipmentDetails", 0] },
+        },
+      },
+      {
+        $sort: { date: 1 },
+      },
+    ]);
 
     let runningBalance = openingBalance;
 
@@ -104,7 +121,8 @@ export async function GET(req) {
         Pcs: e.pcs,
         ActualWeight: e.totalActualWt,
         VolWeight: e.totalVolWt,
-        ChgWeight: Math.max(e.totalActualWt || 0, e.totalVolWt || 0),
+        // Get chargeable weight from joined shipment data
+        ChgWeight: e.shipmentDetail?.chargeableWt || e.chargeableWt || 0,
         SaleAmount: e.basicAmt,
         DiscountPerKg: e.discount,
         DiscountAmount: e.discountAmount,
