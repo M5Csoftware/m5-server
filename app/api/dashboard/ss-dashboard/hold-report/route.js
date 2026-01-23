@@ -16,10 +16,8 @@ export async function GET(request) {
 
     console.log("Hold Report API called with:", { dateRange, from, to });
 
-    // Build query for hold shipments
-    let query = { isHold: true };
-
-    // Apply date filters
+    // Build date filter (applies to both queries)
+    let dateFilter = {};
     const today = new Date();
 
     if (dateRange) {
@@ -27,64 +25,102 @@ export async function GET(request) {
         case "7":
           const sevenDaysAgo = new Date();
           sevenDaysAgo.setDate(today.getDate() - 7);
-          query.date = { $gte: sevenDaysAgo };
+          dateFilter = { date: { $gte: sevenDaysAgo } };
           break;
         case "30":
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(today.getDate() - 30);
-          query.date = { $gte: thirtyDaysAgo };
+          dateFilter = { date: { $gte: thirtyDaysAgo } };
           break;
         case "90":
           const ninetyDaysAgo = new Date();
           ninetyDaysAgo.setDate(today.getDate() - 90);
-          query.date = { $gte: ninetyDaysAgo };
+          dateFilter = { date: { $gte: ninetyDaysAgo } };
           break;
       }
     }
 
     // Apply from/to date filters
     if (from || to) {
-      query.date = query.date || {};
+      dateFilter.date = dateFilter.date || {};
 
       if (from) {
         const fromDate = new Date(from);
-        query.date.$gte = fromDate;
+        dateFilter.date.$gte = fromDate;
       }
       if (to) {
         const toDate = new Date(to);
         const endDate = new Date(toDate);
         endDate.setDate(endDate.getDate() + 1);
-        query.date.$lt = endDate;
+        dateFilter.date.$lt = endDate;
       }
     }
 
-    // Fetch hold shipments with all necessary fields
-    const shipments = await Shipment.find(query)
-      .select({
-        awbNo: 1,
-        date: 1,
-        company: 1,
-        origin: 1,
-        sector: 1,
-        destination: 1,
-        accountCode: 1,
-        customer: 1,
-        receiverFullName: 1,
-        service: 1,
-        forwardingNo: 1,
-        pcs: 1,
-        totalActualWt: 1,
-        chargeableWt: 1,
-        holdReason: 1,
-        otherHoldReason: 1,
-        localMF: 1,
-        operationRemark: 1,
-        createdAt: 1,
-        updatedAt: 1,
-      })
-      .lean();
+    // Query 1: Get hold shipments (isHold: true)
+    const holdQuery = { isHold: true, ...dateFilter };
 
-    console.log(`Found ${shipments.length} hold shipments`);
+    // Query 2: Get ready to fly shipments (forwardingNo exists, runNo empty, billNo empty)
+    const readyToFlyQuery = {
+      forwardingNo: { $exists: true, $ne: "" },
+      $or: [{ runNo: { $exists: false } }, { runNo: "" }, { runNo: null }],
+      $and: [
+        {
+          $or: [
+            { billNo: { $exists: false } },
+            { billNo: "" },
+            { billNo: null },
+          ],
+        },
+      ],
+      ...dateFilter,
+    };
+
+    const selectFields = {
+      awbNo: 1,
+      date: 1,
+      company: 1,
+      origin: 1,
+      sector: 1,
+      destination: 1,
+      accountCode: 1,
+      customer: 1,
+      receiverFullName: 1,
+      service: 1,
+      forwardingNo: 1,
+      runNo: 1,
+      billNo: 1,
+      pcs: 1,
+      totalActualWt: 1,
+      chargeableWt: 1,
+      holdReason: 1,
+      otherHoldReason: 1,
+      localMF: 1,
+      operationRemark: 1,
+      isHold: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    // Fetch both types of shipments
+    const [holdShipments, readyToFlyShipments] = await Promise.all([
+      Shipment.find(holdQuery).select(selectFields).lean(),
+      Shipment.find(readyToFlyQuery).select(selectFields).lean(),
+    ]);
+
+    // Combine and deduplicate shipments (in case a shipment matches both criteria)
+    const shipmentMap = new Map();
+
+    [...holdShipments, ...readyToFlyShipments].forEach((shipment) => {
+      if (!shipmentMap.has(shipment._id.toString())) {
+        shipmentMap.set(shipment._id.toString(), shipment);
+      }
+    });
+
+    const shipments = Array.from(shipmentMap.values());
+
+    console.log(`Found ${holdShipments.length} hold shipments`);
+    console.log(`Found ${readyToFlyShipments.length} ready to fly shipments`);
+    console.log(`Total unique shipments: ${shipments.length}`);
 
     // Get all unique account codes from shipments
     const accountCodes = [
@@ -110,6 +146,16 @@ export async function GET(request) {
       });
     }
 
+    // Helper function to check if shipment is ready to fly
+    const isReadyToFly = (shipment) => {
+      return (
+        shipment.forwardingNo &&
+        shipment.forwardingNo.trim() !== "" &&
+        (!shipment.runNo || shipment.runNo.trim() === "") &&
+        (!shipment.billNo || shipment.billNo.trim() === "")
+      );
+    };
+
     // Process shipments: add branch info and prepare for sorting
     const processedShipments = shipments.map((shipment) => {
       const customerAccount = shipment.accountCode
@@ -118,25 +164,29 @@ export async function GET(request) {
 
       // Determine priority for sorting
       let priority = 2; // Default for "other reasons"
+      let category = "Other Reasons";
 
-      if (
+      // Check if ready to fly first (takes precedence)
+      if (isReadyToFly(shipment)) {
+        priority = 3; // Lowest priority
+        category = "Ready to Fly";
+      } else if (
         shipment.holdReason &&
         shipment.holdReason.toLowerCase().includes("credit limit exceeded")
       ) {
         priority = 0; // Highest priority
-      } else if (
-        shipment.holdReason &&
-        shipment.holdReason.toLowerCase().includes("ready to fly")
-      ) {
-        priority = 3; // Lowest priority
-      } else if (shipment.holdReason) {
+        category = "Credit Limit Exceeded";
+      } else if (shipment.holdReason || shipment.isHold) {
         priority = 1; // Other reasons (middle priority)
+        category = "Other Reasons";
       }
 
       return {
         ...shipment,
         branch: customerAccount?.branch || shipment.company || "",
         priority: priority,
+        category: category,
+        isReadyToFly: isReadyToFly(shipment),
       };
     });
 
