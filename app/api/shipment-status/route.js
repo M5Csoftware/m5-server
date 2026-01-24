@@ -13,11 +13,28 @@ function formatDateYYYYMMDD(date) {
   return `${yyyy}${mm}${dd}`;
 }
 
-export async function POST(req) {
+export async function GET(req) {
   try {
     await connectDB();
 
-    const filters = await req.json();
+    // Extract query parameters from URL
+    const { searchParams } = new URL(req.url);
+    const filters = {
+      from: searchParams.get('from'),
+      to: searchParams.get('to'),
+      counterPart: searchParams.get('counterPart'),
+      runNumber: searchParams.get('runNumber'),
+      code: searchParams.get('code'),
+      client: searchParams.get('client'),
+      branch: searchParams.get('branch'),
+      origin: searchParams.get('origin'),
+      sector: searchParams.get('sector'),
+      status: searchParams.get('status'),
+      destination: searchParams.get('destination'),
+      network: searchParams.get('network'),
+      service: searchParams.get('service'),
+    };
+
     const { from, to } = filters;
 
     let query = {};
@@ -139,7 +156,7 @@ export async function POST(req) {
 
     // Fetch branch data from CustomerAccount for each shipment
     const shipmentsWithBranch = await Promise.all(
-      shipments.map(async (shipment) => {
+      result.map(async (shipment) => {
         let branch = shipment.branch || "";
         
         // If branch is not in shipment, fetch from CustomerAccount
@@ -164,13 +181,6 @@ export async function POST(req) {
     );
 
     return NextResponse.json(shipmentsWithBranch, { status: 200 });
-    // 🔹 Format dates
-    result = result.map((s) => ({
-      ...s,
-      createdAt: s.createdAt ? formatDateYYYYMMDD(s.createdAt) : null,
-    }));
-
-    return NextResponse.json(result, { status: 200 });
   } catch (error) {
     console.error("Error fetching shipments:", error);
     return NextResponse.json(
