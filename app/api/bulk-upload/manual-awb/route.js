@@ -22,14 +22,14 @@ export async function POST(request) {
     if (!shipments || !Array.isArray(shipments) || shipments.length === 0) {
       return NextResponse.json(
         { success: false, message: "No shipments data provided" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!flightDate) {
       return NextResponse.json(
         { success: false, message: "Flight date is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -41,7 +41,7 @@ export async function POST(request) {
     if (awbNumbers.length === 0) {
       return NextResponse.json(
         { success: false, message: "No valid AWB numbers found in the data" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -56,12 +56,12 @@ export async function POST(request) {
 
     // Create a Set of existing AWB numbers for faster lookup
     const existingAwbSet = new Set(
-      existingShipments.map((shipment) => shipment.awbNo)
+      existingShipments.map((shipment) => shipment.awbNo),
     );
 
     // Filter out shipments with existing AWB numbers
     const newShipments = shipments.filter(
-      (shipment) => shipment.awbNo && !existingAwbSet.has(shipment.awbNo)
+      (shipment) => shipment.awbNo && !existingAwbSet.has(shipment.awbNo),
     );
 
     let newRecordsCount = 0;
@@ -95,7 +95,10 @@ export async function POST(request) {
 
           const totalActualWt = Number(shipment.totalActualWt) || 0;
           const totalVolWt = Number(shipment.totalVolWt) || 0;
-          const chargeableWt = Math.ceil(Math.max(totalActualWt, totalVolWt));
+          const chargeableWt =
+            totalVolWt > 0
+              ? Math.ceil(Math.max(totalActualWt, totalVolWt))
+              : Math.ceil(totalActualWt);
 
           // Create clean shipment object with proper data types
           const cleanShipment = {
@@ -133,8 +136,8 @@ export async function POST(request) {
             content: Array.isArray(shipment.content)
               ? shipment.content
               : shipment.content
-              ? [shipment.content]
-              : [],
+                ? [shipment.content]
+                : [],
             // ========== CRITICAL FIXES END ==========
 
             // Convert csb to boolean
@@ -158,7 +161,7 @@ export async function POST(request) {
                 return "Non-Document";
               // Default to Non-Document if invalid or missing
               console.warn(
-                `Invalid shipmentType "${shipment.shipmentType}" for AWB ${shipment.awbNo}, defaulting to Non-Document`
+                `Invalid shipmentType "${shipment.shipmentType}" for AWB ${shipment.awbNo}, defaulting to Non-Document`,
               );
               return "Non-Document";
             })(),
@@ -208,19 +211,19 @@ export async function POST(request) {
             receiverPhoneNumber:
               cleanFieldValue(
                 shipment.receiverPhoneNumber,
-                "receiverPhoneNumber"
+                "receiverPhoneNumber",
               ) || "",
             receiverEmail:
               cleanFieldValue(shipment.receiverEmail, "receiverEmail") || "",
             receiverAddressLine1:
               cleanFieldValue(
                 shipment.receiverAddressLine1,
-                "receiverAddressLine1"
+                "receiverAddressLine1",
               ) || "",
             receiverAddressLine2:
               cleanFieldValue(
                 shipment.receiverAddressLine2,
-                "receiverAddressLine2"
+                "receiverAddressLine2",
               ) || "",
             receiverCity:
               cleanFieldValue(shipment.receiverCity, "receiverCity") || "",
@@ -240,19 +243,19 @@ export async function POST(request) {
             shipperPhoneNumber:
               cleanFieldValue(
                 shipment.shipperPhoneNumber,
-                "shipperPhoneNumber"
+                "shipperPhoneNumber",
               ) || "",
             shipperEmail:
               cleanFieldValue(shipment.shipperEmail, "shipperEmail") || "",
             shipperAddressLine1:
               cleanFieldValue(
                 shipment.shipperAddressLine1,
-                "shipperAddressLine1"
+                "shipperAddressLine1",
               ) || "",
             shipperAddressLine2:
               cleanFieldValue(
                 shipment.shipperAddressLine2,
-                "shipperAddressLine2"
+                "shipperAddressLine2",
               ) || "",
             shipperCity:
               cleanFieldValue(shipment.shipperCity, "shipperCity") || "",
@@ -330,7 +333,7 @@ export async function POST(request) {
           console.log(
             `AWB ${cleanShipment.awbNo}: Boxes count = ${
               cleanShipment.boxes?.length || 0
-            }`
+            }`,
           );
           if (cleanShipment.boxes && cleanShipment.boxes.length > 0) {
             console.log(`Box data:`, cleanShipment.boxes[0]);
@@ -342,7 +345,7 @@ export async function POST(request) {
 
       console.log(
         "Sample shipment to insert (with boxes):",
-        JSON.stringify(shipmentsToInsert[0], null, 2)
+        JSON.stringify(shipmentsToInsert[0], null, 2),
       );
       console.log("Total shipments to insert:", shipmentsToInsert.length);
 
@@ -422,7 +425,7 @@ export async function POST(request) {
           "Result type:",
           typeof result,
           "Is array:",
-          Array.isArray(result)
+          Array.isArray(result),
         );
 
         if (newRecordsCount === 0 && shipmentsToInsert.length > 0) {
@@ -505,7 +508,7 @@ export async function POST(request) {
           message: "Duplicate AWB numbers detected in the upload",
           error: "Some AWB numbers are already present in the database",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -523,7 +526,7 @@ export async function POST(request) {
           error: error.message,
           validationErrors: validationErrors,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -535,7 +538,7 @@ export async function POST(request) {
         errorName: error.name,
         stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -550,7 +553,7 @@ export async function GET(request) {
     if (!awbNo) {
       return NextResponse.json(
         { success: false, message: "AWB number is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -572,7 +575,7 @@ export async function GET(request) {
         message: "Error checking AWB number",
         error: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
