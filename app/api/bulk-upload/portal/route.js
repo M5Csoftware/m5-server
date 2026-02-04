@@ -412,7 +412,7 @@ export async function POST(request) {
           creditAmount: 0,
           operationRemark: shipment.operationRemark,
           reference: shipment.reference,
-          leftOverBalance: oldBalance + totalAmountAdded,
+          leftOverBalance: oldBalance - totalAmountAdded,
           receivedAmount: 0,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -425,7 +425,7 @@ export async function POST(request) {
         }
 
         // Update customer balance
-        const newBalance = oldBalance + totalAmountAdded;
+        const newBalance = oldBalance - totalAmountAdded;
         customer.leftOverBalance = newBalance;
         await customer.save();
 
