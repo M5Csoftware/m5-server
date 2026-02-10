@@ -25,13 +25,26 @@ const APIRequestSchema = new mongoose.Schema(
         },
         branch: {
             type: String,
-            required: true,
+            required: false,
             trim: true,
         },
+        // UPDATED: Changed to accept both String and Array
         apiUseCase: {
-            type: String,
+            type: mongoose.Schema.Types.Mixed, // Accepts both String and Array
             required: true,
-            trim: true,
+            validate: {
+                validator: function(value) {
+                    // Ensure it's either a non-empty string or a non-empty array
+                    if (typeof value === 'string') {
+                        return value.trim().length > 0;
+                    }
+                    if (Array.isArray(value)) {
+                        return value.length > 0;
+                    }
+                    return false;
+                },
+                message: 'apiUseCase must be a non-empty string or array'
+            }
         },
 
         // Default status until admin approves
