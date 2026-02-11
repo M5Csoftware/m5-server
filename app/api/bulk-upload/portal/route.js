@@ -3,6 +3,7 @@ import connectDB from "@/app/lib/db";
 import Shipment from "@/app/model/portal/Shipment";
 import AccountLedger from "@/app/model/AccountLedger";
 import CustomerAccount from "@/app/model/CustomerAccount";
+import Zone from "@/app/model/Zone";
 
 /**
  * Helper function to clean field values
@@ -90,6 +91,46 @@ export async function POST(request) {
     console.log("New shipments to insert:", newShipments.length);
     console.log("Duplicates to skip:", duplicatesCount);
     console.log("Old customer balance:", oldBalance);
+
+    // Validate zone combinations for all new shipments
+    const zoneValidationErrors = [];
+    for (const [index, shipment] of newShipments.entries()) {
+      const sector = cleanFieldValue(shipment.sector, "sector") || "DEFAULT";
+      const destination =
+        cleanFieldValue(shipment.destination, "destination") || "";
+      const service = cleanFieldValue(shipment.service, "service") || "";
+
+      if (sector && destination && service) {
+        const zoneExists = await Zone.findOne({
+          sector: sector,
+          destination: destination,
+          service: service,
+        });
+
+        if (!zoneExists) {
+          zoneValidationErrors.push({
+            index: index,
+            awbNo: shipment.awbNo?.toString().trim() || "Unknown",
+            sector: sector,
+            destination: destination,
+            service: service,
+            error: "Zone combination not found",
+          });
+        }
+      }
+    }
+
+    if (zoneValidationErrors.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Zone validation failed",
+          errors: zoneValidationErrors,
+          totalErrors: zoneValidationErrors.length,
+        },
+        { status: 400 },
+      );
+    }
 
     // Insert only new shipments if there are any
     if (newShipments.length > 0) {
@@ -460,7 +501,7 @@ export async function POST(request) {
       }
     }
 
-    const newBalance = oldBalance + totalAmountAdded;
+    const newBalance = oldBalance - totalAmountAdded;
 
     return NextResponse.json({
       success: true,
