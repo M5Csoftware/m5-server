@@ -1,3 +1,4 @@
+// app/api/v1/shipments/route.js
 import { NextResponse } from "next/server";
 import connectDB from "@/app/lib/db";
 import { validateApiKey } from "@/app/lib/Apikeymiddleware";
@@ -334,6 +335,7 @@ export async function POST(req) {
             origin: body.origin || "",
             status: status,
             insertUser: "API",
+            apiBooking: true,
         };
 
         // Save shipment first

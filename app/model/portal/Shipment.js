@@ -152,6 +152,11 @@ const ShipmentSchema = new mongoose.Schema(
       trim: true,
     },
 
+    apiBooking: {
+      type: Boolean,
+      default: false,
+    },
+
     gstNumber: {
       type: String,
       trim: true,
