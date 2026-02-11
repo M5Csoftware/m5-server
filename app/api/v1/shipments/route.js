@@ -19,6 +19,15 @@ import ChildShipment from "@/app/model/portal/ChildShipment";
 
 await connectDB();
 
+// CORS Headers Helper
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key, X-API-Key',
+  };
+}
+
 // BALANCE CALCULATION UTILITY FUNCTION
 function calculateBalanceAndCredit(balance, credit, amount) {
   let newBalance = balance;
@@ -49,6 +58,20 @@ function calculateBalanceAndCredit(balance, credit, amount) {
 }
 
 /**
+ * OPTIONS /api/v1/shipments
+ * Handle preflight requests
+ */
+export async function OPTIONS(req) {
+  return NextResponse.json(
+    {},
+    {
+      status: 200,
+      headers: corsHeaders()
+    }
+  );
+}
+
+/**
  * GET /api/v1/shipments
  * Get shipment details by AWB number
  */
@@ -61,7 +84,12 @@ export async function GET(req) {
         });
 
         if (!validation.valid) {
-            return validation.response;
+            const response = validation.response;
+            const body = await response.json();
+            return NextResponse.json(body, { 
+              status: response.status,
+              headers: corsHeaders()
+            });
         }
 
         const { apiKey, customer, usage } = validation.data;
@@ -88,7 +116,10 @@ export async function GET(req) {
                         message: `No shipment found with AWB: ${awb}`,
                         code: "SHIPMENT_NOT_FOUND"
                     },
-                    { status: 404 }
+                    { 
+                      status: 404,
+                      headers: corsHeaders()
+                    }
                 );
             }
         } else if (runNo) {
@@ -127,7 +158,10 @@ export async function GET(req) {
             },
             { 
                 status: 200,
-                headers: getRateLimitHeaders(apiKey, usage)
+                headers: {
+                  ...getRateLimitHeaders(apiKey, usage),
+                  ...corsHeaders()
+                }
             }
         );
 
@@ -141,7 +175,10 @@ export async function GET(req) {
                 code: "INTERNAL_ERROR",
                 details: process.env.NODE_ENV === 'development' ? error.message : undefined
             },
-            { status: 500 }
+            { 
+              status: 500,
+              headers: corsHeaders()
+            }
         );
     }
 }
@@ -159,7 +196,12 @@ export async function POST(req) {
         });
 
         if (!validation.valid) {
-            return validation.response;
+            const response = validation.response;
+            const body = await response.json();
+            return NextResponse.json(body, { 
+              status: response.status,
+              headers: corsHeaders()
+            });
         }
 
         const { apiKey, customer, usage } = validation.data;
@@ -180,7 +222,10 @@ export async function POST(req) {
                     code: "MISSING_FIELDS",
                     fields: missingFields
                 },
-                { status: 400 }
+                { 
+                  status: 400,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -196,7 +241,10 @@ export async function POST(req) {
                     error: "Customer account not found",
                     code: "CUSTOMER_NOT_FOUND"
                 },
-                { status: 404 }
+                { 
+                  status: 404,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -270,7 +318,10 @@ export async function POST(req) {
                         message: `AWB number ${newAwbNo} already exists`,
                         code: "DUPLICATE_AWB"
                     },
-                    { status: 400 }
+                    { 
+                      status: 400,
+                      headers: corsHeaders()
+                    }
                 );
             }
         }
@@ -423,7 +474,10 @@ export async function POST(req) {
             },
             { 
                 status: 201,
-                headers: getRateLimitHeaders(apiKey, usage)
+                headers: {
+                  ...getRateLimitHeaders(apiKey, usage),
+                  ...corsHeaders()
+                }
             }
         );
 
@@ -437,7 +491,10 @@ export async function POST(req) {
                 code: "INTERNAL_ERROR",
                 details: process.env.NODE_ENV === 'development' ? error.message : undefined
             },
-            { status: 500 }
+            { 
+              status: 500,
+              headers: corsHeaders()
+            }
         );
     }
 }
@@ -455,7 +512,12 @@ export async function PUT(req) {
         });
 
         if (!validation.valid) {
-            return validation.response;
+            const response = validation.response;
+            const body = await response.json();
+            return NextResponse.json(body, { 
+              status: response.status,
+              headers: corsHeaders()
+            });
         }
 
         const { apiKey, customer, usage } = validation.data;
@@ -472,7 +534,10 @@ export async function PUT(req) {
                     message: "Please provide an AWB number",
                     code: "MISSING_AWB"
                 },
-                { status: 400 }
+                { 
+                  status: 400,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -490,7 +555,10 @@ export async function PUT(req) {
                     message: `No shipment found with AWB: ${awb}`,
                     code: "SHIPMENT_NOT_FOUND"
                 },
-                { status: 404 }
+                { 
+                  status: 404,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -509,7 +577,10 @@ export async function PUT(req) {
                     error: "Customer account not found",
                     code: "CUSTOMER_NOT_FOUND"
                 },
-                { status: 404 }
+                { 
+                  status: 404,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -642,7 +713,10 @@ export async function PUT(req) {
             },
             { 
                 status: 200,
-                headers: getRateLimitHeaders(apiKey, usage)
+                headers: {
+                  ...getRateLimitHeaders(apiKey, usage),
+                  ...corsHeaders()
+                }
             }
         );
 
@@ -656,7 +730,10 @@ export async function PUT(req) {
                 code: "INTERNAL_ERROR",
                 details: process.env.NODE_ENV === 'development' ? error.message : undefined
             },
-            { status: 500 }
+            { 
+              status: 500,
+              headers: corsHeaders()
+            }
         );
     }
 }
@@ -674,7 +751,12 @@ export async function DELETE(req) {
         });
 
         if (!validation.valid) {
-            return validation.response;
+            const response = validation.response;
+            const body = await response.json();
+            return NextResponse.json(body, { 
+              status: response.status,
+              headers: corsHeaders()
+            });
         }
 
         const { apiKey, customer, usage } = validation.data;
@@ -691,7 +773,10 @@ export async function DELETE(req) {
                     message: "Please provide an AWB number",
                     code: "MISSING_AWB"
                 },
-                { status: 400 }
+                { 
+                  status: 400,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -709,7 +794,10 @@ export async function DELETE(req) {
                     message: `No shipment found with AWB: ${awb}`,
                     code: "SHIPMENT_NOT_FOUND"
                 },
-                { status: 404 }
+                { 
+                  status: 404,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -725,7 +813,10 @@ export async function DELETE(req) {
                     error: "Customer account not found",
                     code: "CUSTOMER_NOT_FOUND"
                 },
-                { status: 404 }
+                { 
+                  status: 404,
+                  headers: corsHeaders()
+                }
             );
         }
 
@@ -796,7 +887,10 @@ export async function DELETE(req) {
             },
             { 
                 status: 200,
-                headers: getRateLimitHeaders(apiKey, usage)
+                headers: {
+                  ...getRateLimitHeaders(apiKey, usage),
+                  ...corsHeaders()
+                }
             }
         );
 
@@ -810,7 +904,10 @@ export async function DELETE(req) {
                 code: "INTERNAL_ERROR",
                 details: process.env.NODE_ENV === 'development' ? error.message : undefined
             },
-            { status: 500 }
+            { 
+              status: 500,
+              headers: corsHeaders()
+            }
         );
     }
 }
