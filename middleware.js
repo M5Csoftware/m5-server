@@ -13,7 +13,7 @@ export function middleware(request) {
     );
     response.headers.set(
       'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-Requested-With, Accept'
+      'Content-Type, Authorization, X-Requested-With, Accept, x-api-key, X-API-Key'
     );
     response.headers.set('Access-Control-Max-Age', '86400');
     
@@ -24,6 +24,14 @@ export function middleware(request) {
   const response = NextResponse.next();
   
   response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, PATCH, OPTIONS'
+  );
+  response.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, Accept, x-api-key, X-API-Key'
+  );
   
   return response;
 }
