@@ -14,6 +14,8 @@ export async function GET(req) {
     const runNo = searchParams.get("runNo");
     const clubNo = searchParams.get("clubNo");
     const manifestNo = searchParams.get("manifestNumber");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     if (!accountCode && !awbNo && !runNo && !clubNo && !manifestNo) {
       return NextResponse.json(
@@ -39,15 +41,31 @@ export async function GET(req) {
       return NextResponse.json({ shipment });
     }
 
+    // Build date filter if provided
+    let dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.createdAt = {};
+      if (startDate) {
+        dateFilter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        // Set end date to end of day
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateFilter.createdAt.$lte = end;
+      }
+    }
+
     // Handle account code query
     if (accountCode) {
-      const shipments = await Shipment.find({ accountCode }).sort({ date: -1 });
+      const query = { accountCode, ...dateFilter };
+      const shipments = await Shipment.find(query).sort({ createdAt: -1 });
 
       if (shipments.length === 0) {
-        return NextResponse.json(
-          { message: "No shipments found for this account" },
-          { status: 404 }
-        );
+        return NextResponse.json({
+          shipments: [],
+          message: "No shipments found for this account in the selected date range",
+        });
       }
 
       return NextResponse.json({ shipments });
@@ -55,27 +73,29 @@ export async function GET(req) {
 
     // Handle run number query
     if (runNo) {
-      const shipments = await Shipment.find({ runNo }).sort({ date: -1 });
+      const query = { runNo, ...dateFilter };
+      const shipments = await Shipment.find(query).sort({ createdAt: -1 });
 
       if (shipments.length === 0) {
-        return NextResponse.json(
-          { message: "No shipments found for this run number" },
-          { status: 404 }
-        );
+        return NextResponse.json({
+          shipments: [],
+          message: "No shipments found for this run number in the selected date range",
+        });
       }
 
       return NextResponse.json({ shipments });
     }
 
-    // Handle club number query - FIXED: Should return array not single object
+    // Handle club number query
     if (clubNo) {
-      const shipments = await Shipment.find({ clubNo }).sort({ date: -1 });
+      const query = { clubNo, ...dateFilter };
+      const shipments = await Shipment.find(query).sort({ createdAt: -1 });
 
       if (shipments.length === 0) {
-        return NextResponse.json(
-          { message: "No shipments found for this club number" },
-          { status: 404 }
-        );
+        return NextResponse.json({
+          shipments: [],
+          message: "No shipments found for this club number in the selected date range",
+        });
       }
 
       return NextResponse.json({ shipments });
@@ -83,13 +103,14 @@ export async function GET(req) {
 
     // Handle manifest number query
     if (manifestNo) {
-      const shipments = await Shipment.find({ manifestNo }).sort({ date: -1 });
+      const query = { manifestNo, ...dateFilter };
+      const shipments = await Shipment.find(query).sort({ createdAt: -1 });
 
       if (shipments.length === 0) {
-        return NextResponse.json(
-          { message: "No shipments found for this manifest number" },
-          { status: 404 }
-        );
+        return NextResponse.json({
+          shipments: [],
+          message: "No shipments found for this manifest number in the selected date range",
+        });
       }
 
       return NextResponse.json({ shipments });
