@@ -21,7 +21,7 @@ export async function GET(request) {
         const samples = await Invoice.find({}, "invoiceNumber").limit(5);
         console.log(
           "📋 Sample invoices:",
-          samples.map((i) => i.invoiceNumber)
+          samples.map((i) => i.invoiceNumber),
         );
 
         return NextResponse.json(
@@ -29,7 +29,7 @@ export async function GET(request) {
             success: false,
             message: `Invoice not found: ${invoiceNumber}`,
           },
-          { status: 404 }
+          { status: 404 },
         );
       }
 
@@ -78,7 +78,7 @@ export async function GET(request) {
 
     const invoices = await Invoice.find(
       {},
-      "invoiceNumber branch invoiceDate totalAwb invoiceSummary.grandTotal"
+      "invoiceNumber branch invoiceDate totalAwb invoiceSummary.grandTotal customer",
     ).sort({ createdAt: -1 });
 
     if (!invoices.length) {
@@ -94,7 +94,7 @@ export async function GET(request) {
       ...new Set(
         invoices
           .map((i) => i.branch)
-          .filter((branch) => branch != null && branch !== "")
+          .filter((branch) => branch != null && branch !== ""),
       ),
     ];
 
@@ -113,7 +113,7 @@ export async function GET(request) {
         invoices: [],
         branches: [],
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
