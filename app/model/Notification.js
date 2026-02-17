@@ -1,44 +1,67 @@
 import mongoose from "mongoose";
 
-const NotificationSchema = new mongoose.Schema(
-    {
-        accountCode: {
-            type: String,
-            required: true,  // unique identifier for user
-        },
-
-        type: {
-            type: String,
-            enum: [
-                "Manifest Requested",
-                "Shipment Booked",
-                "Shipment received at Hub",
-                "Shipment Hold",
-            ],
-            required: true,
-        },
-
-        title: { type: String, required: true },
-        description: { type: String, required: true },
-
-        awb: { type: String, required: true },
-
-        pickupCode: { type: String, default: "" },
-        address: { type: String, default: "" },
-        date: { type: String, default: "" },
-
-        // Status
-        isRead: { type: Boolean, default: false },
-
-        // Hold status
-        isHold: { type: Boolean, default: false },
-        holdReason: { type: String, default: "" },
-
-        // Soft delete
-        isDeleted: { type: Boolean, default: false },
+const notificationSchema = new mongoose.Schema(
+  {
+    accountCode: {
+      type: String,
+      required: true,
+      index: true,
     },
-    { timestamps: true }
+
+    name: {
+      type: String,
+      required: true,
+    },
+
+    awbNo: {
+      type: String,
+      index: true, 
+    },
+
+    event: {
+      type: String,
+      required: true,
+    },
+
+    description: {
+      type: String,
+      required: true, 
+    },
+
+    message: {
+      type: String,
+      required: true, 
+    },
+
+    link: String,
+
+    priority: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "low",
+    },
+
+    isRead: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    emailSent: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true },
 );
 
+notificationSchema.index({ accountCode: 1, isRead: 1, createdAt: -1 });
+
 export default mongoose.models.Notification ||
-    mongoose.model("Notification", NotificationSchema);
+  mongoose.model("Notification", notificationSchema);
