@@ -24,12 +24,12 @@ function calculateBalanceAndCredit(balance, credit, amount) {
         newCredit: Number(credit.toFixed(2)),
         usedCredit: 0,
         usedBalance: amount,
-        message: "Amount deducted from wallet balance"
+        message: "Amount deducted from wallet balance",
       };
     } else {
       // Need to use credit for remaining amount
       const remainingAmount = Number((amount - balance).toFixed(2));
-      
+
       if (credit >= remainingAmount) {
         // Enough credit available
         return {
@@ -38,7 +38,7 @@ function calculateBalanceAndCredit(balance, credit, amount) {
           newCredit: Number((credit - remainingAmount).toFixed(2)),
           usedCredit: remainingAmount,
           usedBalance: balance,
-          message: `₹${balance} deducted from wallet, ₹${remainingAmount} from credit`
+          message: `₹${balance} deducted from wallet, ₹${remainingAmount} from credit`,
         };
       } else {
         // Insufficient credit
@@ -50,15 +50,15 @@ function calculateBalanceAndCredit(balance, credit, amount) {
           requiredAmount: amount,
           availableBalance: balance,
           availableCredit: credit,
-          message: "Credit limit exceeded"
+          message: "Credit limit exceeded",
         };
       }
     }
-  } 
+  }
   // If balance is negative (customer owes money)
   else {
     const absoluteBalance = Math.abs(balance);
-    
+
     if (absoluteBalance >= amount) {
       // Reduce the negative balance
       return {
@@ -67,12 +67,14 @@ function calculateBalanceAndCredit(balance, credit, amount) {
         newCredit: Number(credit.toFixed(2)),
         usedCredit: 0,
         usedBalance: amount,
-        message: `Outstanding balance reduced by ₹${amount}`
+        message: `Outstanding balance reduced by ₹${amount}`,
       };
     } else {
       // Need to use credit for remaining amount after clearing negative balance
-      const remainingAfterClearance = Number((amount - absoluteBalance).toFixed(2));
-      
+      const remainingAfterClearance = Number(
+        (amount - absoluteBalance).toFixed(2),
+      );
+
       if (credit >= remainingAfterClearance) {
         return {
           insufficient: false,
@@ -80,7 +82,7 @@ function calculateBalanceAndCredit(balance, credit, amount) {
           newCredit: Number((credit - remainingAfterClearance).toFixed(2)),
           usedCredit: remainingAfterClearance,
           usedBalance: absoluteBalance,
-          message: `Outstanding balance cleared, ₹${remainingAfterClearance} deducted from credit`
+          message: `Outstanding balance cleared, ₹${remainingAfterClearance} deducted from credit`,
         };
       } else {
         // Insufficient credit
@@ -92,7 +94,8 @@ function calculateBalanceAndCredit(balance, credit, amount) {
           requiredAmount: amount,
           availableBalance: balance,
           availableCredit: credit,
-          message: "Credit limit exceeded even after adjusting outstanding balance"
+          message:
+            "Credit limit exceeded even after adjusting outstanding balance",
         };
       }
     }
@@ -110,7 +113,7 @@ export async function POST(req) {
       accountCode: body.accountCode,
       source: body.source,
       grandTotal: body.grandTotal || body.totalAmt,
-      awbNo: body.awbNo
+      awbNo: body.awbNo,
     });
 
     // 1. Validate Customer
@@ -122,7 +125,7 @@ export async function POST(req) {
       console.error("Customer not found:", body.accountCode);
       return NextResponse.json(
         { error: "Customer not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -134,14 +137,14 @@ export async function POST(req) {
     console.log("Financial Status:", {
       currentBalance: currentBalance.toFixed(2),
       currentCredit: currentCredit.toFixed(2),
-      shipmentAmount: grandTotal.toFixed(2)
+      shipmentAmount: grandTotal.toFixed(2),
     });
 
     // Use the fixed utility function
     const creditResult = calculateBalanceAndCredit(
       currentBalance,
       currentCredit,
-      grandTotal
+      grandTotal,
     );
 
     let isHold = false;
@@ -153,7 +156,7 @@ export async function POST(req) {
       isHold = true;
       holdReason = "Credit Limit Exceeded";
       holdReasonDetail = creditResult.message;
-      
+
       // DO NOT update balance when putting on hold
       console.log("🚫 SHIPMENT ON HOLD:", {
         reason: holdReason,
@@ -161,19 +164,18 @@ export async function POST(req) {
         deficit: creditResult.deficit,
         requiredAmount: creditResult.requiredAmount,
         availableBalance: creditResult.availableBalance,
-        availableCredit: creditResult.availableCredit
+        availableCredit: creditResult.availableCredit,
       });
-      
     } else {
       // ✅ NORMAL FLOW - Sufficient balance/credit
       isHold = false;
       holdReason = "";
-      
+
       // Update customer balance and credit
       customer.leftOverBalance = creditResult.newBalance;
       customer.creditLimit = creditResult.newCredit;
       await customer.save();
-      
+
       console.log("✅ Balance updated successfully:", {
         previousBalance: currentBalance.toFixed(2),
         previousCredit: currentCredit.toFixed(2),
@@ -181,7 +183,7 @@ export async function POST(req) {
         newCredit: creditResult.newCredit.toFixed(2),
         usedBalance: creditResult.usedBalance || 0,
         usedCredit: creditResult.usedCredit || 0,
-        message: creditResult.message
+        message: creditResult.message,
       });
     }
 
@@ -220,7 +222,7 @@ export async function POST(req) {
       if (exists) {
         return NextResponse.json(
           { error: `AWB No ${newAwbNo} already exists` },
-          { status: 400 }
+          { status: 400 },
         );
       }
       console.log("Manual AWB:", newAwbNo);
@@ -229,78 +231,86 @@ export async function POST(req) {
     // 4. Prepare Ledger - ONLY for non-hold shipments
     if (!isHold) {
       try {
-        const ledgerData = body.source === "Portal"
-          ? {
-              accountCode: body.accountCode,
-              customer: customer.name,
-              awbNo: newAwbNo,
-              payment: "Credit",
-              date: body.date ? new Date(body.date) : new Date(),
-              isHold: false,
-              operationRemark: body.operationRemark || "",
-              leftOverBalance: customer.leftOverBalance,
+        const ledgerData =
+          body.source === "Portal"
+            ? {
+                accountCode: body.accountCode,
+                customer: customer.name,
+                awbNo: newAwbNo,
+                payment: "Credit",
+                date: body.date ? new Date(body.date) : new Date(),
+                isHold: false,
+                operationRemark: body.operationRemark || "",
+                leftOverBalance: customer.leftOverBalance,
 
-              sector: body.sector,
-              runNo: body.runNo || "",
-              destination: body.destination,
-              forwarder: body.forwarder || "",
-              forwardingNo: body.forwardingNo || "",
-              receiverCity: body.receiverCity,
-              receiverPincode: body.receiverPincode,
+                sector: body.sector,
+                runNo: body.runNo || "",
+                destination: body.destination,
+                forwarder: body.forwarder || "",
+                forwardingNo: body.forwardingNo || "",
+                receiverCity: body.receiverCity,
+                receiverPincode: body.receiverPincode,
 
-              pcs: body.boxes?.length || 0,
-              totalActualWt: body.totalActualWt || 0,
-              totalVolWt: body.totalVolWt || 0,
+                pcs: body.boxes?.length || 0,
+                totalActualWt: body.totalActualWt || 0,
+                totalVolWt: body.totalVolWt || 0,
 
-              basicAmt: Number(body.totalInvoiceValue || body.basicAmt || 0),
-              discount: Number(body.discount || 0),
-              discountAmount: Number(body.discountAmt || 0),
-              hikeAmt: Number(body.hikeAmt || 0),
-              sgst: Number(body.sgst || 0),
-              cgst: Number(body.cgst || 0),
-              igst: Number(body.igst || 0),
-              miscChg: Number(body.miscChg || 0),
-              fuelAmt: Number(body.fuelAmt || 0),
-              nonTaxable: Number(body.nonTaxable || 0),
-              totalAmt: Number(body.baseGrandTotal || body.grandTotal || body.totalInvoiceValue || 0),
-              reference: body.reference || body.referenceNo || "NA",
-            }
-          : {
-              accountCode: body.accountCode,
-              customer: customer.name,
-              awbNo: newAwbNo,
-              payment: body.payment || "Credit",
-              date: body.date ? new Date(body.date.split("/").reverse().join("-")) : new Date(),
-              isHold: false,
-              operationRemark: body.operationRemark || "",
-              leftOverBalance: customer.leftOverBalance,
+                basicAmt: Number(body.totalInvoiceValue || body.basicAmt || 0),
+                discount: Number(body.discount || 0),
+                discountAmount: Number(body.discountAmt || 0),
+                hikeAmt: Number(body.hikeAmt || 0),
+                sgst: Number(body.sgst || 0),
+                cgst: Number(body.cgst || 0),
+                igst: Number(body.igst || 0),
+                miscChg: Number(body.miscChg || 0),
+                fuelAmt: Number(body.fuelAmt || 0),
+                nonTaxable: Number(body.nonTaxable || 0),
+                totalAmt: Number(
+                  body.baseGrandTotal ||
+                    body.grandTotal ||
+                    body.totalInvoiceValue ||
+                    0,
+                ),
+                reference: body.reference || body.referenceNo || "NA",
+              }
+            : {
+                accountCode: body.accountCode,
+                customer: customer.name,
+                awbNo: newAwbNo,
+                payment: body.payment || "Credit",
+                date: body.date
+                  ? new Date(body.date.split("/").reverse().join("-"))
+                  : new Date(),
+                isHold: false,
+                operationRemark: body.operationRemark || "",
+                leftOverBalance: customer.leftOverBalance,
 
-              sector: body.sector,
-              receiverFullName: body.consignee,
-              runNo: body.runNo,
-              destination: body.destination,
-              forwarder: body.forwarder,
-              forwardingNo: body.forwardingNo,
-              receiverCity: body["consignee-city"],
-              receiverPincode: body["consignee-zipcode"],
-              service: body.service,
+                sector: body.sector,
+                receiverFullName: body.consignee,
+                runNo: body.runNo,
+                destination: body.destination,
+                forwarder: body.forwarder,
+                forwardingNo: body.forwardingNo,
+                receiverCity: body["consignee-city"],
+                receiverPincode: body["consignee-zipcode"],
+                service: body.service,
 
-              pcs: Number(body.pcs || 0),
-              totalActualWt: Number(body.actualWt || 0),
-              totalVolWt: Number(body.totalVolWt || 0),
-              basicAmt: Number(body.basicAmount || 0),
-              discount: Number(body.discount || 0),
-              discountAmount: Number(body.discountAmt || 0),
-              hikeAmt: Number(body.hikeAmt || 0),
-              sgst: Number(body.sgst || 0),
-              cgst: Number(body.cgst || 0),
-              igst: Number(body.igst || 0),
-              miscChg: Number(body.miscChg || 0),
-              fuelAmt: Number(body.fuelAmt || 0),
-              nonTaxable: Number(body.nonTaxable || 0),
-              totalAmt: Number(body.grandTotal || 0),
-              reference: body.referenceNo || "NA",
-            };
+                pcs: Number(body.pcs || 0),
+                totalActualWt: Number(body.actualWt || 0),
+                totalVolWt: Number(body.totalVolWt || 0),
+                basicAmt: Number(body.basicAmount || 0),
+                discount: Number(body.discount || 0),
+                discountAmount: Number(body.discountAmt || 0),
+                hikeAmt: Number(body.hikeAmt || 0),
+                sgst: Number(body.sgst || 0),
+                cgst: Number(body.cgst || 0),
+                igst: Number(body.igst || 0),
+                miscChg: Number(body.miscChg || 0),
+                fuelAmt: Number(body.fuelAmt || 0),
+                nonTaxable: Number(body.nonTaxable || 0),
+                totalAmt: Number(body.grandTotal || 0),
+                reference: body.referenceNo || "NA",
+              };
 
         await new AccountLedger(ledgerData).save();
         console.log("✅ Ledger entry created for AWB:", newAwbNo);
@@ -312,7 +322,8 @@ export async function POST(req) {
 
     // 5. EVENT ACTIVITY HANDLING
     const eventCode = body.eventCode || (isHold ? "HOLD" : "SRD");
-    const status = body.status || (isHold ? "Shipment put on Hold" : "Shipment Created!");
+    const status =
+      body.status || (isHold ? "Shipment put on Hold" : "Shipment Created!");
     const eventLocation = body.eventLocation || body.origin || "";
     const entryUser = body.entryUser || body.insertUser || "System";
     const eventAwbNo = newAwbNo;
@@ -336,7 +347,7 @@ export async function POST(req) {
               eventLocation: eventLocation,
               eventLogTime: currentDate,
             },
-          }
+          },
         );
       } else {
         eventActivity = new EventActivity({
@@ -354,7 +365,12 @@ export async function POST(req) {
 
         await eventActivity.save();
       }
-      console.log(`✅ EventActivity saved for AWB:`, eventAwbNo, "Event:", eventCode);
+      console.log(
+        `✅ EventActivity saved for AWB:`,
+        eventAwbNo,
+        "Event:",
+        eventCode,
+      );
     } catch (eventError) {
       console.error("❌ EventActivity error:", eventError);
     }
@@ -377,106 +393,114 @@ export async function POST(req) {
     }
 
     // 7. Prepare Shipment Data (Unified)
-    const shipmentData = body.source === "Portal"
-      ? {
-          ...body,
-          awbNo: newAwbNo,
-          customer: customer.name,
-          isHold: isHold,
-          holdReason: holdReason,
-          holdReasonDetail: holdReasonDetail,
-          status: isHold ? "Shipment put on Hold" : "Shipment Created!",
-          eventCode: eventCode,
-          chargeableWt: Number(body.chargeableWt || 0),
-          totalAmt: Number(body.grandTotal || body.totalAmt || 0),
-        }
-      : {
-          awbNo: newAwbNo,
-          accountCode: body.accountCode,
-          customer: customer.name,
-          date: body.date ? new Date(body.date.split("/").reverse().join("-")) : new Date(),
-          sector: body.sector,
-          destination: body.destination || "",
-          reference: body.referenceNo || "",
-          forwardingNo: body.fwdNumber || "",
-          goodstype: body.goodstype || "",
-          payment: body.payment || "Credit",
-          totalActualWt: Number(body.actualWt || 0),
-          chargeableWt: Number(body.chargeableWt || 0),
-          totalVolWt: Number(body.volWt || 0),
-          totalInvoiceValue: Number(body.invoiceValue || 0),
-          content: body.content || "",
-          operationRemark: body.operationRemark || "",
-          automation: body.automation || false,
-          handling: body.handling || false,
-          csb: body.csb || false,
-          commercialShipment: body.commercialShipment || false,
-          isHold: isHold,
-          holdReason: holdReason,
-          holdReasonDetail: holdReasonDetail,
-          otherHoldReason: body.otherHoldReason || "",
-          pcs: Number(body.pcs || 0),
-          service: body.service || "",
-          currency: body.currency || "",
-          currencys: body.currencys || "",
+    const shipmentData =
+      body.source === "Portal"
+        ? {
+            ...body,
+            awbNo: newAwbNo,
+            customer: customer.name,
+            isHold: isHold,
+            holdReason: holdReason,
+            holdReasonDetail: holdReasonDetail,
+            status: isHold ? "Shipment put on Hold" : "Shipment Created!",
+            eventCode: eventCode,
+            chargeableWt: Number(body.chargeableWt || 0),
+            totalAmt: Number(body.grandTotal || body.totalAmt || 0),
+          }
+        : {
+            awbNo: newAwbNo,
+            accountCode: body.accountCode,
+            customer: customer.name,
+            date: body.date
+              ? new Date(body.date.split("/").reverse().join("-"))
+              : new Date(),
+            sector: body.sector,
+            destination: body.destination || "",
+            reference: body.referenceNo || "",
+            forwardingNo: body.fwdNumber || "",
+            goodstype: body.goodstype || "",
+            payment: body.payment || "Credit",
+            totalActualWt: Number(body.actualWt || 0),
+            chargeableWt: Number(body.chargeableWt || 0),
+            totalVolWt: Number(body.volWt || 0),
+            totalInvoiceValue: Number(body.invoiceValue || 0),
+            content: body.content || "",
+            operationRemark: body.operationRemark || "",
+            automation: body.automation || false,
+            handling: body.handling || false,
+            csb: body.csb || false,
+            commercialShipment: body.commercialShipment || false,
+            isHold: isHold,
+            holdReason: holdReason,
+            holdReasonDetail: holdReasonDetail,
+            otherHoldReason: body.otherHoldReason || "",
+            pcs: Number(body.pcs || 0),
+            service: body.service || "",
+            currency: body.currency || "",
+            currencys: body.currencys || "",
 
-          basicAmt: Number(body.basicAmount || 0),
-          cgst: Number(body.cgst || 0),
-          sgst: Number(body.sgst || 0),
-          igst: Number(body.igst || 0),
-          totalAmt: Number(body.grandTotal || 0),
-          billNo: body.billNo || "",
-          manifestNo: body.manifestNo || "",
-          runNo: body.runNo || "",
-          discount: Number(body.discount || 0),
-          discountAmt: Number(body.discountAmt || 0),
-          duty: Number(body.duty || 0),
-          fuelAmt: Number(body.fuelAmt || 0),
-          fuelPercentage: Number(body.fuelPercentage || 0),
-          handlingAmount: Number(body.handlingAmount || 0),
-          hikeAmt: Number(body.hikeAmt || 0),
-          manualAmount: Number(body.manualAmount || 0),
-          miscChg: Number(body.miscChg || 0),
-          miscChgReason: body.miscChgReason || "",
-          overWtHandling: Number(body.overWtHandling || 0),
-          volDisc: Number(body.volDisc || 0),
-          cashRecvAmount: Number(body.cashRecvAmount || 0),
+            basicAmt: Number(body.basicAmount || 0),
+            cgst: Number(body.cgst || 0),
+            sgst: Number(body.sgst || 0),
+            igst: Number(body.igst || 0),
+            totalAmt: Number(body.grandTotal || 0),
+            billNo: body.billNo || "",
+            manifestNo: body.manifestNo || "",
+            runNo: body.runNo || "",
+            discount: Number(body.discount || 0),
+            discountAmt: Number(body.discountAmt || 0),
+            duty: Number(body.duty || 0),
+            fuelAmt: Number(body.fuelAmt || 0),
+            fuelPercentage: Number(body.fuelPercentage || 0),
+            handlingAmount: Number(body.handlingAmount || 0),
+            hikeAmt: Number(body.hikeAmt || 0),
+            manualAmount: Number(body.manualAmount || 0),
+            miscChg: Number(body.miscChg || 0),
+            miscChgReason: body.miscChgReason || "",
+            overWtHandling: Number(body.overWtHandling || 0),
+            volDisc: Number(body.volDisc || 0),
+            cashRecvAmount: Number(body.cashRecvAmount || 0),
 
-          receiverFullName: body.consignee,
-          receiverPhoneNumber: body["consignee-telephone"],
-          receiverEmail: body["consignee-emailID"],
-          receiverAddressLine1: body["consignee-addressLine1"],
-          receiverAddressLine2: body["consignee-addressLine2"],
-          receiverCity: body["consignee-city"],
-          receiverState: body["consignee-state"],
-          receiverPincode: body["consignee-zipcode"],
+            receiverFullName: body.consignee,
+            receiverPhoneNumber: body["consignee-telephone"],
+            receiverEmail: body["consignee-emailID"],
+            receiverAddressLine1: body["consignee-addressLine1"],
+            receiverAddressLine2: body["consignee-addressLine2"],
+            receiverCity: body["consignee-city"],
+            receiverState: body["consignee-state"],
+            receiverPincode: body["consignee-zipcode"],
 
-          shipperFullName: body.consignor,
-          shipperPhoneNumber: body["consignor-telephone"],
-          shipperEmail: body["consignor-emailID"],
-          shipperAddressLine1: body["consignor-addressLine1"],
-          shipperAddressLine2: body["consignor-addressLine2"],
-          shipperCity: body["consignor-city"],
-          shipperState: body["consignor-state"],
-          shipperPincode: body["consignor-pincode"],
-          shipperKycType: body["consignor-idType"] || "other",
-          shipperKycNumber: body["consignor-idNumber"],
+            shipperFullName: body.consignor,
+            shipperPhoneNumber: body["consignor-telephone"],
+            shipperEmail: body["consignor-emailID"],
+            shipperAddressLine1: body["consignor-addressLine1"],
+            shipperAddressLine2: body["consignor-addressLine2"],
+            shipperCity: body["consignor-city"],
+            shipperState: body["consignor-state"],
+            shipperPincode: body["consignor-pincode"],
+            shipperKycType: body["consignor-idType"] || "other",
+            shipperKycNumber: body["consignor-idNumber"],
 
-          shipmentAndPackageDetails: body.invoiceContent || {},
-          boxes: body.volumeContent || [],
-          coLoader: body.coLoader || "",
-          coLoaderNumber: Number(body.coLoaderNumber || 0),
-          origin: body.origin || "",
-          status: isHold ? "Shipment put on Hold" : "Shipment Created!",
-          eventCode: eventCode,
-          insertUser: body.insertUser || "",
-          updateUser: body.updateUser || "",
-        };
+            shipmentAndPackageDetails: body.invoiceContent || {},
+            boxes: body.volumeContent || [],
+            coLoader: body.coLoader || "",
+            coLoaderNumber: Number(body.coLoaderNumber || 0),
+            origin: body.origin || "",
+            status: isHold ? "Shipment put on Hold" : "Shipment Created!",
+            eventCode: eventCode,
+            insertUser: body.insertUser || "",
+            updateUser: body.updateUser || "",
+          };
 
     // 8. Save Shipment
     const shipment = new Shipment(shipmentData);
     const savedShipment = await shipment.save();
-    console.log(`✅ Shipment saved:`, savedShipment.awbNo, "Hold Status:", isHold);
+    console.log(
+      `✅ Shipment saved:`,
+      savedShipment.awbNo,
+      "Hold Status:",
+      isHold,
+    );
 
     // 9. Update onboarding - ONLY for non-hold portal shipments
     if (body.source === "Portal" && !isHold && userId) {
@@ -491,21 +515,23 @@ export async function POST(req) {
     }
 
     // Return response with hold status
-    return NextResponse.json({
-      ...savedShipment.toObject(),
-      isHold,
-      holdReason,
-      message: isHold 
-        ? "Shipment created but placed on hold due to insufficient credit. Please recharge your account to release the shipment." 
-        : "Shipment created successfully",
-      financialStatus: creditResult
-    }, { status: 201 });
-    
+    return NextResponse.json(
+      {
+        ...savedShipment.toObject(),
+        isHold,
+        holdReason,
+        message: isHold
+          ? "Shipment created but placed on hold due to insufficient credit. Please recharge your account to release the shipment."
+          : "Shipment created successfully",
+        financialStatus: creditResult,
+      },
+      { status: 201 },
+    );
   } catch (err) {
     console.error("❌ Shipment Creation Error:", err);
     return NextResponse.json(
       { error: "Failed to add shipment", details: err.message },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
@@ -526,7 +552,7 @@ export async function GET(req) {
       if (!shipment) {
         return NextResponse.json(
           { error: "Shipment not found" },
-          { status: 404 }
+          { status: 404 },
         );
       }
       return NextResponse.json(shipment, { status: 200 });
@@ -540,12 +566,13 @@ export async function GET(req) {
     console.error("Error in fetching Shipment:", error.message);
     return NextResponse.json(
       { error: "Failed to fetch Shipment", details: error.message },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
 
 // ============ PUT FUNCTION ============
+// ============ PUT FUNCTION (FIXED) ============
 export async function PUT(req) {
   try {
     await connectDB();
@@ -563,7 +590,7 @@ export async function PUT(req) {
     if (!shipment) {
       return NextResponse.json(
         { error: "Shipment not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -575,92 +602,74 @@ export async function PUT(req) {
     if (!customer) {
       return NextResponse.json(
         { error: "Customer not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
-    // 3. Update Customer Balance & Credit using utility function
+    // 3. HANDLE HOLD REASON FROM BODY - FIXED
+    // Get hold reason from body, properly handling the dropdown selection
+    let isHold = body.isHold !== undefined ? body.isHold : shipment.isHold;
+    let holdReason = body.holdReason || shipment.holdReason || "";
+    let otherHoldReason =
+      body.otherHoldReason || shipment.otherHoldReason || "";
+
+    // If hold is false, clear hold reasons
+    if (!isHold) {
+      holdReason = "";
+      otherHoldReason = "";
+    } else {
+      // If hold reason is "Other" or empty, use otherHoldReason
+      if (holdReason === "Other" || holdReason === " ") {
+        holdReason = otherHoldReason || "Other";
+      }
+    }
+
+    console.log("Hold status update:", {
+      isHold,
+      holdReason,
+      otherHoldReason,
+      fromBody: {
+        isHold: body.isHold,
+        holdReason: body.holdReason,
+        otherHoldReason: body.otherHoldReason,
+      },
+    });
+
+    // 4. Update Customer Balance & Credit using utility function (only if amount changed)
     const oldAmt = Number(shipment.totalAmt || 0);
     const newAmt = Number(body.grandTotal || body.totalAmt || 0);
     const diff = Number((newAmt - oldAmt).toFixed(2));
 
-    let isHold = shipment.isHold || false;
-    let holdReason = shipment.holdReason || "";
-
-    if (diff === 0) {
-      console.log("No amount change detected, skipping financial updates");
-    } else if (diff < 0) {
-      // 🔻 REFUND FLOW
-      const refund = Math.abs(diff);
-      
-      // Always add refund to wallet balance
-      customer.leftOverBalance = Number((customer.leftOverBalance + refund).toFixed(2));
-      
-      // If this was a hold shipment and now being updated, we might want to check if it can be released
-      if (shipment.isHold && shipment.holdReason === "Credit Limit Exceeded") {
-        // Check if now there's sufficient balance/credit
-        const checkResult = calculateBalanceAndCredit(
-          customer.leftOverBalance,
-          customer.creditLimit,
-          0 // Just checking, not deducting
+    if (diff !== 0) {
+      if (diff < 0) {
+        // 🔻 REFUND FLOW
+        const refund = Math.abs(diff);
+        customer.leftOverBalance = Number(
+          (customer.leftOverBalance + refund).toFixed(2),
         );
-        
-        // If balance is positive now, we can release from hold in the update
-        if (customer.leftOverBalance >= 0) {
-          body.isHold = false;
-          body.holdReason = "";
-          body.eventCode = "RELEASED";
-          body.status = "Shipment Released from Hold";
-          isHold = false;
-          holdReason = "";
-        }
-      }
-      
-      await customer.save();
-      console.log(`💰 Refund of ₹${refund} applied. New balance: ${customer.leftOverBalance}`);
-      
-    } else {
-      // 🔺 EXTRA CHARGE FLOW (diff > 0)
-      
-      // Case 1: Shipment is on HOLD due to credit
-      if (shipment.isHold && shipment.holdReason === "Credit Limit Exceeded") {
-        // Just add to balance (negative or positive)
-        customer.leftOverBalance = Number((customer.leftOverBalance + diff).toFixed(2));
         await customer.save();
-        console.log(`💰 Hold shipment - added ₹${diff} to balance. New balance: ${customer.leftOverBalance}`);
-        
-        // Check if balance is now sufficient to release from hold
-        if (customer.leftOverBalance >= 0) {
-          body.isHold = false;
-          body.holdReason = "";
-          body.eventCode = "RELEASED";
-          body.status = "Shipment Released from Hold";
-          isHold = false;
-          holdReason = "";
-          console.log("✅ Shipment released from hold due to sufficient balance");
-        }
+        console.log(
+          `💰 Refund of ₹${refund} applied. New balance: ${customer.leftOverBalance}`,
+        );
       } else {
-        // Case 2: Normal shipment → apply credit rules
+        // 🔺 EXTRA CHARGE FLOW
         const result = calculateBalanceAndCredit(
           customer.leftOverBalance,
           customer.creditLimit,
-          diff
+          diff,
         );
 
         if (result.insufficient) {
-          // Put on hold
-          body.isHold = true;
-          body.holdReason = "Credit Limit Exceeded";
-          body.eventCode = "HOLD";
-          body.status = "Shipment put on Hold";
+          // Auto-hold if credit insufficient
           isHold = true;
           holdReason = "Credit Limit Exceeded";
-          
+          console.log("🚫 Auto-placed on HOLD due to insufficient credit");
+
           // Add to balance (negative)
-          customer.leftOverBalance = Number((customer.leftOverBalance + diff).toFixed(2));
+          customer.leftOverBalance = Number(
+            (customer.leftOverBalance + diff).toFixed(2),
+          );
           await customer.save();
-          console.log("🚫 Shipment placed on HOLD due to insufficient credit");
-          
         } else {
           // Sufficient credit
           customer.leftOverBalance = result.newBalance;
@@ -671,104 +680,106 @@ export async function PUT(req) {
       }
     }
 
-    // 4. Prepare ledger update - only for non-hold shipments
+    // 5. Prepare ledger update - only for non-hold shipments
     if (!isHold) {
       try {
-        const ledgerData = body.source === "Portal"
-          ? {
-              accountCode: body.accountCode,
-              customer: body.customerName || customer.name,
-              awbNo: awbNo,
-              payment: "Credit",
-              date: body.date ? new Date(body.date) : new Date(),
-              isHold: false,
-              operationRemark: body.operationRemark || "",
-              leftOverBalance: customer.leftOverBalance,
+        const ledgerData =
+          body.source === "Portal"
+            ? {
+                accountCode: body.accountCode,
+                customer: body.customerName || customer.name,
+                awbNo: awbNo,
+                payment: "Credit",
+                date: body.date ? new Date(body.date) : new Date(),
+                isHold: false,
+                operationRemark: body.operationRemark || "",
+                leftOverBalance: customer.leftOverBalance,
+                sector: body.sector,
+                runNo: body.runNo || "",
+                destination: body.destination,
+                forwarder: body.forwarder || "",
+                forwardingNo: body.forwardingNo || "",
+                receiverCity: body.receiverCity,
+                receiverPincode: body.receiverPincode,
+                pcs: body.boxes?.length || 0,
+                totalActualWt: body.totalActualWt || 0,
+                totalVolWt: body.totalVolWt || 0,
+                basicAmt: Number(body.totalInvoiceValue || body.basicAmt || 0),
+                discount: Number(body.discount || 0),
+                discountAmount: Number(body.discountAmt || 0),
+                hikeAmt: Number(body.hikeAmt || 0),
+                sgst: Number(body.sgst || 0),
+                cgst: Number(body.cgst || 0),
+                igst: Number(body.igst || 0),
+                miscChg: Number(body.miscChg || 0),
+                fuelAmt: Number(body.fuelAmt || 0),
+                nonTaxable: Number(body.nonTaxable || 0),
+                totalAmt: Number(
+                  body.baseGrandTotal ||
+                    body.grandTotal ||
+                    body.totalInvoiceValue ||
+                    0,
+                ),
+                reference: body.reference || body.referenceNo || "NA",
+              }
+            : {
+                accountCode: body.accountCode,
+                customer: body.customer || customer.name,
+                awbNo: awbNo,
+                payment: body.payment || "Credit",
+                date: body.date
+                  ? new Date(body.date.split("/").reverse().join("-"))
+                  : new Date(),
+                isHold: false,
+                operationRemark: body.operationRemark || "",
+                leftOverBalance: customer.leftOverBalance,
+                sector: body.sector,
+                runNo: body.runNo,
+                destination: body.destination,
+                forwarder: body.forwarder,
+                forwardingNo: body.forwardingNo,
+                receiverFullName: body.consignee,
+                receiverCity: body["consignee-city"],
+                receiverPincode: body["consignee-zipcode"],
+                service: body.service,
+                pcs: Number(body.pcs || 0),
+                totalActualWt: Number(body.actualWt || 0),
+                totalVolWt: Number(body.totalVolWt || 0),
+                basicAmt: Number(body.basicAmount || 0),
+                discount: Number(body.discount || 0),
+                discountAmount: Number(body.discountAmt || 0),
+                hikeAmt: Number(body.hikeAmt || 0),
+                sgst: Number(body.sgst || 0),
+                cgst: Number(body.cgst || 0),
+                igst: Number(body.igst || 0),
+                miscChg: Number(body.miscChg || 0),
+                fuelAmt: Number(body.fuelAmt || 0),
+                nonTaxable: Number(body.nonTaxable || 0),
+                totalAmt: Number(body.grandTotal || 0),
+                reference: body.referenceNo || "NA",
+              };
 
-              sector: body.sector,
-              runNo: body.runNo || "",
-              destination: body.destination,
-              forwarder: body.forwarder || "",
-              forwardingNo: body.forwardingNo || "",
-              receiverCity: body.receiverCity,
-              receiverPincode: body.receiverPincode,
-
-              pcs: body.boxes?.length || 0,
-              totalActualWt: body.totalActualWt || 0,
-              totalVolWt: body.totalVolWt || 0,
-
-              basicAmt: Number(body.totalInvoiceValue || body.basicAmt || 0),
-              discount: Number(body.discount || 0),
-              discountAmount: Number(body.discountAmt || 0),
-              hikeAmt: Number(body.hikeAmt || 0),
-              sgst: Number(body.sgst || 0),
-              cgst: Number(body.cgst || 0),
-              igst: Number(body.igst || 0),
-              miscChg: Number(body.miscChg || 0),
-              fuelAmt: Number(body.fuelAmt || 0),
-              nonTaxable: Number(body.nonTaxable || 0),
-              totalAmt: Number(body.baseGrandTotal || body.grandTotal || body.totalInvoiceValue || 0),
-              reference: body.reference || body.referenceNo || "NA",
-            }
-          : {
-              accountCode: body.accountCode,
-              customer: body.customer || customer.name,
-              awbNo: awbNo,
-              payment: body.payment || "Credit",
-              date: body.date ? new Date(body.date.split("/").reverse().join("-")) : new Date(),
-              isHold: false,
-              operationRemark: body.operationRemark || "",
-              leftOverBalance: customer.leftOverBalance,
-
-              sector: body.sector,
-              runNo: body.runNo,
-              destination: body.destination,
-              forwarder: body.forwarder,
-              forwardingNo: body.forwardingNo,
-              receiverFullName: body.consignee,
-              receiverCity: body["consignee-city"],
-              receiverPincode: body["consignee-zipcode"],
-              service: body.service,
-
-              pcs: Number(body.pcs || 0),
-              totalActualWt: Number(body.actualWt || 0),
-              totalVolWt: Number(body.totalVolWt || 0),
-              basicAmt: Number(body.basicAmount || 0),
-              discount: Number(body.discount || 0),
-              discountAmount: Number(body.discountAmt || 0),
-              hikeAmt: Number(body.hikeAmt || 0),
-              sgst: Number(body.sgst || 0),
-              cgst: Number(body.cgst || 0),
-              igst: Number(body.igst || 0),
-              miscChg: Number(body.miscChg || 0),
-              fuelAmt: Number(body.fuelAmt || 0),
-              nonTaxable: Number(body.nonTaxable || 0),
-              totalAmt: Number(body.grandTotal || 0),
-              reference: body.referenceNo || "NA",
-            };
-
-        await AccountLedger.findOneAndUpdate(
-          { awbNo },
-          ledgerData,
-          { new: true, upsert: true }
-        );
+        await AccountLedger.findOneAndUpdate({ awbNo }, ledgerData, {
+          new: true,
+          upsert: true,
+        });
         console.log("✅ Ledger updated for AWB:", awbNo);
       } catch (ledgerError) {
         console.error("❌ Ledger update error:", ledgerError);
       }
     }
 
-    // 5. HOLD / UNHOLD / RELEASED EVENT ACTIVITY
+    // 6. HOLD/UNHOLD EVENT ACTIVITY - ONLY when hold status changes
     const previousHold = shipment.isHold;
-    const newHold = body.isHold !== undefined ? body.isHold : isHold;
 
-    if (previousHold !== newHold) {
-      const eventCode = newHold ? "HOLD" : "RELEASED";
-      const status = newHold
+    if (previousHold !== isHold) {
+      const eventCode = isHold ? "HOLD" : "RELEASED";
+      const status = isHold
         ? "Shipment put on Hold"
         : "Shipment Released from Hold";
       const eventLocation = body.eventLocation || body.origin || "";
       const entryUser = body.updateUser || "System";
+      const holdReasonText = isHold ? holdReason : "";
 
       const now = new Date();
       const formattedTime = now.toTimeString().slice(0, 5);
@@ -788,8 +799,9 @@ export async function PUT(req) {
                 eventUser: entryUser,
                 eventLocation: eventLocation,
                 eventLogTime: now,
+                holdReason: holdReasonText, // Add hold reason to event
               },
-            }
+            },
           );
         } else {
           const newEvent = new EventActivity({
@@ -801,6 +813,7 @@ export async function PUT(req) {
             eventUser: [entryUser],
             eventLocation: [eventLocation],
             eventLogTime: [now],
+            holdReason: [holdReasonText], // Add hold reason to event
             remark: body.remarks || null,
             receiverName: body.consignee || body.customerName || null,
           });
@@ -808,13 +821,17 @@ export async function PUT(req) {
           await newEvent.save();
         }
 
-        console.log(`📌 EventActivity added for ${eventCode} on AWB: ${awbNo}`);
+        console.log(
+          `📌 EventActivity added for ${eventCode} on AWB: ${awbNo} with reason: ${holdReasonText}`,
+        );
       } catch (eventError) {
         console.error("❌ EventActivity error:", eventError);
       }
+    } else {
+      console.log("ℹ️ Hold status unchanged - no event activity created");
     }
 
-    // 6. Map update fields to shipment schema
+    // 7. Map update fields to shipment schema
     const parseDate = (d) => {
       if (!d) return null;
       if (typeof d === "string" && d.includes("/")) {
@@ -824,118 +841,125 @@ export async function PUT(req) {
       return new Date(d);
     };
 
-    const updateData = body.source === "Portal"
-      ? {
-          ...body,
-          isHold: isHold,
-          holdReason: holdReason,
-          status: isHold ? "Shipment put on Hold" : body.status || "Shipment Updated",
-        }
-      : {
-          accountCode: body.accountCode,
-          date: parseDate(body.date),
-          sector: body.sector,
-          destination: body.destination || "",
-          reference: body.referenceNo || "",
-          forwardingNo: body.fwdNumber || "",
-          goodstype: body.goodstype || "",
-          payment: body.payment || "Credit",
+    // Prepare update data with proper hold fields - FIXED
+    const updateData = {
+      ...(body.source === "Portal" ? body : {}),
+      // Always include these fields
+      isHold: isHold,
+      holdReason: holdReason,
+      otherHoldReason: otherHoldReason,
+      status: isHold
+        ? "Shipment put on Hold"
+        : body.status || "Shipment Updated",
+      // Non-portal fields
+      accountCode: body.accountCode,
+      date: parseDate(body.date),
+      sector: body.sector,
+      destination: body.destination || "",
+      reference: body.referenceNo || "",
+      forwardingNo: body.fwdNumber || "",
+      goodstype: body.goodstype || "",
+      payment: body.payment || "Credit",
+      totalActualWt: Number(body.actualWt || 0),
+      chargeableWt: Number(body.chargeableWt || 0),
+      totalVolWt: Number(body.volWt || 0),
+      totalInvoiceValue: Number(body.invoiceValue || 0),
+      content: body.content || "",
+      operationRemark: body.operationRemark,
+      automation: body.automation || false,
+      handling: body.handling || false,
+      csb: body.csb || false,
+      commercialShipment: body.commercialShipment || false,
+      currency: body.currency || "",
+      currencys: body.currencys || "",
+      pcs: Number(body.pcs || 0),
+      service: body.service || "",
+      basicAmt: Number(body.basicAmount || 0),
+      cgst: Number(body.cgst || 0),
+      sgst: Number(body.sgst || 0),
+      igst: Number(body.igst || 0),
+      totalAmt: Number(body.grandTotal || 0),
+      billNo: body.billNo,
+      manifestNo: body.manifestNo,
+      runNo: body.runNo,
+      discount: Number(body.discount || 0),
+      discountAmt: Number(body.discountAmt || 0),
+      duty: Number(body.duty || 0),
+      fuelAmt: Number(body.fuelAmt || 0),
+      fuelPercentage: Number(body.fuelPercentage || 0),
+      handlingAmount: Number(body.handlingAmount || 0),
+      hikeAmt: Number(body.hikeAmt || 0),
+      manualAmount: Number(body.manualAmount || 0),
+      miscChg: Number(body.miscChg || 0),
+      miscChgReason: body.miscChgReason || "",
+      overWtHandling: Number(body.overWtHandling || 0),
+      volDisc: Number(body.volDisc || 0),
+      cashRecvAmount: Number(body.cashRecvAmount || 0),
+      receiverFullName: body.consignee,
+      receiverPhoneNumber: body["consignee-telephone"],
+      receiverEmail: body["consignee-emailID"],
+      receiverAddressLine1: body["consignee-addressLine1"],
+      receiverAddressLine2: body["consignee-addressLine2"],
+      receiverCity: body["consignee-city"],
+      receiverState: body["consignee-state"],
+      receiverPincode: body["consignee-zipcode"],
+      shipperFullName: body.consignor,
+      shipperPhoneNumber: body["consignor-telephone"],
+      shipperEmail: body["consignor-emailID"],
+      shipperAddressLine1: body["consignor-addressLine1"],
+      shipperAddressLine2: body["consignor-addressLine2"],
+      shipperCity: body["consignor-city"],
+      shipperState: body["consignor-state"],
+      shipperPincode: body["consignor-pincode"],
+      shipperKycType: body["consignor-idType"] || "other",
+      shipperKycNumber: body["consignor-idNumber"],
+      shipmentAndPackageDetails: body.invoiceContent || {},
+      boxes: body.volumeContent || [],
+      coLoader: body.coLoader,
+      coLoaderNumber: Number(body.coLoaderNumber || 0),
+      origin: body.origin || "",
+      forwarder: body.forwarder,
+      eventCode: isHold
+        ? "HOLD"
+        : previousHold !== isHold
+          ? isHold
+            ? "HOLD"
+            : "RELEASED"
+          : "UPD",
+      insertUser: shipment.insertUser,
+      updateUser: body.updateUser || "",
+    };
 
-          totalActualWt: Number(body.actualWt || 0),
-          chargeableWt: Number(body.chargeableWt || 0),
-          totalVolWt: Number(body.volWt || 0),
-          totalInvoiceValue: Number(body.invoiceValue || 0),
-          content: body.content || "",
-          operationRemark: body.operationRemark,
-          automation: body.automation || false,
-          handling: body.handling || false,
-          csb: body.csb || false,
-          commercialShipment: body.commercialShipment || false,
-          isHold: isHold,
-          holdReason: holdReason,
-          otherHoldReason: body.otherHoldReason || "",
-          currency: body.currency || "",
-          currencys: body.currencys || "",
-
-          pcs: Number(body.pcs || 0),
-          service: body.service || "",
-
-          basicAmt: Number(body.basicAmount || 0),
-          cgst: Number(body.cgst || 0),
-          sgst: Number(body.sgst || 0),
-          igst: Number(body.igst || 0),
-          totalAmt: Number(body.grandTotal || 0),
-          billNo: body.billNo,
-          manifestNo: body.manifestNo,
-          runNo: body.runNo,
-          discount: Number(body.discount || 0),
-          discountAmt: Number(body.discountAmt || 0),
-          duty: Number(body.duty || 0),
-          fuelAmt: Number(body.fuelAmt || 0),
-          fuelPercentage: Number(body.fuelPercentage || 0),
-          handlingAmount: Number(body.handlingAmount || 0),
-          hikeAmt: Number(body.hikeAmt || 0),
-          manualAmount: Number(body.manualAmount || 0),
-          miscChg: Number(body.miscChg || 0),
-          miscChgReason: body.miscChgReason || "",
-          overWtHandling: Number(body.overWtHandling || 0),
-          volDisc: Number(body.volDisc || 0),
-          cashRecvAmount: Number(body.cashRecvAmount || 0),
-
-          receiverFullName: body.consignee,
-          receiverPhoneNumber: body["consignee-telephone"],
-          receiverEmail: body["consignee-emailID"],
-          receiverAddressLine1: body["consignee-addressLine1"],
-          receiverAddressLine2: body["consignee-addressLine2"],
-          receiverCity: body["consignee-city"],
-          receiverState: body["consignee-state"],
-          receiverPincode: body["consignee-zipcode"],
-
-          shipperFullName: body.consignor,
-          shipperPhoneNumber: body["consignor-telephone"],
-          shipperEmail: body["consignor-emailID"],
-          shipperAddressLine1: body["consignor-addressLine1"],
-          shipperAddressLine2: body["consignor-addressLine2"],
-          shipperCity: body["consignor-city"],
-          shipperState: body["consignor-state"],
-          shipperPincode: body["consignor-pincode"],
-          shipperKycType: body["consignor-idType"] || "other",
-          shipperKycNumber: body["consignor-idNumber"],
-
-          shipmentAndPackageDetails: body.invoiceContent || {},
-          boxes: body.volumeContent || [],
-          coLoader: body.coLoader,
-          coLoaderNumber: Number(body.coLoaderNumber || 0),
-          origin: body.origin || "",
-          forwarder: body.forwarder,
-          status: isHold ? "Shipment put on Hold" : body.status || shipment.status,
-          eventCode: isHold ? "HOLD" : body.eventCode || "UPD",
-
-          insertUser: shipment.insertUser,
-          updateUser: body.updateUser || "",
-        };
-
-    // 7. Apply update
+    // 8. Apply update
     const updatedShipment = await Shipment.findOneAndUpdate(
       { awbNo },
       updateData,
-      { new: true }
+      { new: true },
     );
 
-    console.log(`✅ Shipment updated:`, awbNo, "Hold Status:", isHold);
+    console.log(
+      `✅ Shipment updated:`,
+      awbNo,
+      "Hold Status:",
+      isHold,
+      "Hold Reason:",
+      holdReason,
+    );
 
-    return NextResponse.json({
-      ...updatedShipment.toObject(),
-      message: isHold 
-        ? "Shipment updated but is on hold due to insufficient credit" 
-        : "Shipment updated successfully"
-    }, { status: 200 });
-    
+    return NextResponse.json(
+      {
+        ...updatedShipment.toObject(),
+        message: isHold
+          ? "Shipment updated but is on hold"
+          : "Shipment updated successfully",
+      },
+      { status: 200 },
+    );
   } catch (error) {
     console.error("❌ PUT Error:", error);
     return NextResponse.json(
       { error: "Failed to update shipment", details: error.message },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
@@ -948,10 +972,7 @@ export async function DELETE(req) {
     const awbNo = req.nextUrl.searchParams.get("awbNo");
 
     if (!awbNo) {
-      return NextResponse.json(
-        { error: "awbNo is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "awbNo is required" }, { status: 400 });
     }
 
     // 1. Get shipment
@@ -960,7 +981,7 @@ export async function DELETE(req) {
     if (!shipment) {
       return NextResponse.json(
         { error: "Shipment not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -972,7 +993,7 @@ export async function DELETE(req) {
     if (!customer) {
       return NextResponse.json(
         { error: "Customer not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -981,24 +1002,32 @@ export async function DELETE(req) {
     // 3. REFUND LOGIC - FIXED
     if (!shipment.isHold) {
       // Only refund if shipment was NOT on hold
-      
+
       if (customer.leftOverBalance < 0) {
         // Customer has outstanding balance
-        customer.leftOverBalance = Number((customer.leftOverBalance + refundAmount).toFixed(2));
-        
+        customer.leftOverBalance = Number(
+          (customer.leftOverBalance + refundAmount).toFixed(2),
+        );
+
         // If balance becomes positive, restore credit
         if (customer.leftOverBalance > 0) {
           const excessAmount = customer.leftOverBalance;
           customer.leftOverBalance = 0;
-          customer.creditLimit = Number((customer.creditLimit + excessAmount).toFixed(2));
+          customer.creditLimit = Number(
+            (customer.creditLimit + excessAmount).toFixed(2),
+          );
         }
       } else {
         // Customer has positive balance
-        customer.leftOverBalance = Number((customer.leftOverBalance + refundAmount).toFixed(2));
+        customer.leftOverBalance = Number(
+          (customer.leftOverBalance + refundAmount).toFixed(2),
+        );
       }
-      
+
       await customer.save();
-      console.log(`💰 Refund of ₹${refundAmount} applied. New balance: ${customer.leftOverBalance}`);
+      console.log(
+        `💰 Refund of ₹${refundAmount} applied. New balance: ${customer.leftOverBalance}`,
+      );
     } else {
       console.log(`🚫 Shipment was on hold, no refund applied`);
     }
@@ -1015,21 +1044,20 @@ export async function DELETE(req) {
     console.log("🗑 Shipment deleted successfully:", awbNo);
 
     return NextResponse.json(
-      { 
-        message: shipment.isHold 
-          ? "Shipment deleted successfully (no refund applied as shipment was on hold)" 
+      {
+        message: shipment.isHold
+          ? "Shipment deleted successfully (no refund applied as shipment was on hold)"
           : "Shipment deleted and refund applied successfully",
         refundApplied: !shipment.isHold ? refundAmount : 0,
-        newBalance: !shipment.isHold ? customer.leftOverBalance : null
+        newBalance: !shipment.isHold ? customer.leftOverBalance : null,
       },
-      { status: 200 }
+      { status: 200 },
     );
-    
   } catch (error) {
     console.error("❌ DELETE Error:", error);
     return NextResponse.json(
       { error: "Failed to delete shipment", details: error.message },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
