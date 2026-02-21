@@ -28,9 +28,18 @@ export async function POST(req) {
 
     // 2️⃣ Convert event → preference key
     // Example: "Shipment Hold" → shipmentHold_portal
+    let normalizedEvent = body.event;
+    const searchString = `${body.event} ${body.message || ""} ${body.description || ""}`.toLowerCase();
+
+    if (searchString.includes("hold")) {
+      normalizedEvent = "Shipment Hold";
+    } else if (searchString.includes("delay")) {
+      normalizedEvent = "Shipment Delayed";
+    }
+
     const key =
-      body.event.replace(/\s+/g, "").charAt(0).toLowerCase() +
-      body.event.replace(/\s+/g, "").slice(1);
+      normalizedEvent.replace(/\s+/g, "").charAt(0).toLowerCase() +
+      normalizedEvent.replace(/\s+/g, "").slice(1);
 
     const portalKey = `${key}_portal`;
 
