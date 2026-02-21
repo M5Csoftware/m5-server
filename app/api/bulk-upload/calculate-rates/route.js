@@ -105,6 +105,88 @@ const getRateFromRateSheet = async (
 };
 
 /**
+ * Find zone using zipcode for Canada or Australia shipments.
+ * Mirrors the logic from /portal/create-shipment/get-rates/route.js
+ * @param {string} sector
+ * @param {string} destination
+ * @param {string} service
+ * @param {string} zipcode - raw postal code from shipment
+ * @param {string} zoneMatrix - from matching ShipperTariff
+ * @param {Date} currentDate
+ * @returns {Promise<object|null>} matching Zone record or null
+ */
+const findZoneByZipcode = async (sector, destination, service, zipcode, zoneMatrix, currentDate) => {
+  const cleanedZip = zipcode.replace(/\s+/g, '').toUpperCase();
+  const isAustralia = sector.toLowerCase().includes('australia') && destination.toLowerCase().includes('australia');
+  const isCanada = sector.toLowerCase().includes('canada') && destination.toLowerCase().includes('canada');
+
+  const baseQuery = {
+    sector: { $regex: new RegExp(`^${sector.trim()}$`, 'i') },
+    destination: { $regex: new RegExp(`^${destination.trim()}$`, 'i') },
+    service: { $regex: new RegExp(`^${service.trim()}$`, 'i') },
+    isActive: true,
+  };
+
+  if (zoneMatrix) {
+    baseQuery.zoneMatrix = zoneMatrix;
+  }
+
+  let zoneRecord = null;
+
+  if (isAustralia) {
+    const firstChar = cleanedZip.substring(0, 1);
+    const firstTwoChars = cleanedZip.substring(0, 2);
+
+    // 1. Full 4-digit postcode
+    if (!zoneRecord && cleanedZip.length >= 4) {
+      zoneRecord = await Zone.findOne({ ...baseQuery, zipcode: cleanedZip.substring(0, 4) }).lean();
+    }
+    // 2. First two digits
+    if (!zoneRecord && cleanedZip.length >= 2) {
+      zoneRecord = await Zone.findOne({ ...baseQuery, zipcode: firstTwoChars }).lean();
+    }
+    // 3. First digit
+    if (!zoneRecord) {
+      zoneRecord = await Zone.findOne({ ...baseQuery, zipcode: firstChar }).lean();
+    }
+    // 4. State code from first digit
+    if (!zoneRecord) {
+      const stateMap = { '2': 'NSW', '3': 'VIC', '4': 'QLD', '5': 'SA', '6': 'WA', '7': 'TAS', '0': 'NT' };
+      const stateCode = stateMap[firstChar];
+      if (stateCode) {
+        zoneRecord = await Zone.findOne({ ...baseQuery, zipcode: stateCode }).lean();
+      }
+    }
+    // 5. General / empty zipcode
+    if (!zoneRecord) {
+      zoneRecord = await Zone.findOne({
+        ...baseQuery,
+        $or: [{ zipcode: '' }, { zipcode: null }, { zipcode: { $exists: false } }],
+      }).lean();
+    }
+  } else if (isCanada) {
+    const fsa = cleanedZip.substring(0, 3);
+    const firstLetter = cleanedZip.substring(0, 1);
+
+    // 1. FSA (first 3 chars)
+    zoneRecord = await Zone.findOne({ ...baseQuery, zipcode: fsa }).lean();
+    // 2. First letter
+    if (!zoneRecord) {
+      zoneRecord = await Zone.findOne({ ...baseQuery, zipcode: firstLetter }).lean();
+    }
+    // 3. General / empty zipcode
+    if (!zoneRecord) {
+      zoneRecord = await Zone.findOne({
+        ...baseQuery,
+        $or: [{ zipcode: '' }, { zipcode: null }, { zipcode: { $exists: false } }],
+      }).lean();
+    }
+  }
+
+  return zoneRecord || null;
+};
+
+/**
  * POST /api/portal/bulk-upload/calculate-rates
  * Calculate rates for bulk upload shipments
  */
@@ -239,11 +321,29 @@ export async function POST(request) {
       uniqueSectorDestinations,
     );
 
+    // ---- Build a per-shipment pincode map for AU/CA lookups ----
+    // Key: awbNo → receiverPincode (only kept for AU/CA shipments)
+    const shipmentPincodeMap = {};
+    for (const shipment of shipments) {
+      if (shipment.receiverPincode) {
+        shipmentPincodeMap[shipment.awbNo] = shipment.receiverPincode;
+      }
+    }
+
     // Case-insensitive zone lookup
     const zoneMap = {};
 
     for (const key of uniqueSectorDestinations) {
       const [sector, destination, service] = key.split(DELIMITER);
+
+      // Detect AU/CA by sector+destination strings
+      const isAustralia =
+        sector.toLowerCase().includes('australia') &&
+        destination.toLowerCase().includes('australia');
+      const isCanada =
+        sector.toLowerCase().includes('canada') &&
+        destination.toLowerCase().includes('canada');
+      const needsZipcode = isAustralia || isCanada;
 
       // Get the matching rate tariff to get zoneMatrix
       const rateTariff = rateTariffs.find((rt) => {
@@ -260,7 +360,15 @@ export async function POST(request) {
         continue;
       }
 
-      // Query zone with zoneMatrix, sector, destination, and service
+      if (needsZipcode) {
+        // For AU/CA we store a function reference; actual lookup happens per-shipment below
+        // Mark this combo as zipcode-dependent so we skip the shared zoneMap entry
+        console.log(`ℹ️ ${isAustralia ? 'Australia' : 'Canada'} shipment detected for key: ${key} — zone will be resolved per-shipment using receiverPincode`);
+        zoneMap[key] = { __zipcodeDependent: true, rateTariff };
+        continue;
+      }
+
+      // Standard zone lookup (non-AU/CA)
       const zone = await Zone.findOne({
         zoneMatrix: rateTariff.zoneMatrix,
         sector: { $regex: new RegExp(`^${sector.trim()}$`, "i") },
@@ -309,7 +417,41 @@ export async function POST(request) {
         try {
           // Find zone for this shipment
           const zoneKey = `${shipment.sector}${DELIMITER}${shipment.destination}${DELIMITER}${shipment.service}`;
-          const zone = zoneMap[zoneKey];
+          let zone = zoneMap[zoneKey];
+
+          // Handle zipcode-dependent zones (Australia / Canada)
+          if (zone && zone.__zipcodeDependent) {
+            const { rateTariff: zipRateTariff } = zone;
+            const pincode = shipment.receiverPincode;
+
+            if (!pincode || pincode.trim() === '') {
+              return {
+                awbNo: shipment.awbNo,
+                success: false,
+                error: `Zipcode/Postal code is required for ${shipment.sector} shipments`,
+              };
+            }
+
+            const zoneRecord = await findZoneByZipcode(
+              shipment.sector,
+              shipment.destination,
+              shipment.service,
+              pincode,
+              zipRateTariff.zoneMatrix,
+              currentDate,
+            );
+
+            if (!zoneRecord) {
+              return {
+                awbNo: shipment.awbNo,
+                success: false,
+                error: `No zone mapping found for zipcode "${pincode}" in ${shipment.sector} → ${shipment.destination}`,
+              };
+            }
+
+            console.log(`✅ Zipcode zone resolved for ${shipment.awbNo}: zipcode=${pincode}, zone=${zoneRecord.zone}`);
+            zone = zoneRecord;
+          }
 
           if (!zone) {
             console.warn(`Zone not found for: ${zoneKey}`);
