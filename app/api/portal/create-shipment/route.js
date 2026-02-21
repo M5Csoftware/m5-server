@@ -572,7 +572,6 @@ export async function GET(req) {
 }
 
 // ============ PUT FUNCTION ============
-// ============ PUT FUNCTION (FIXED) ============
 export async function PUT(req) {
   try {
     await connectDB();
@@ -606,7 +605,7 @@ export async function PUT(req) {
       );
     }
 
-    // 3. HANDLE HOLD REASON FROM BODY - FIXED
+    // 3. HANDLE HOLD REASON FROM BODY
     // Get hold reason from body, properly handling the dropdown selection
     let isHold = body.isHold !== undefined ? body.isHold : shipment.isHold;
     let holdReason = body.holdReason || shipment.holdReason || "";
@@ -770,6 +769,7 @@ export async function PUT(req) {
     }
 
     // 6. HOLD/UNHOLD EVENT ACTIVITY - ONLY when hold status changes
+    // NO OTHER MODIFICATIONS WILL CREATE EVENT ACTIVITY
     const previousHold = shipment.isHold;
 
     if (previousHold !== isHold) {
@@ -799,7 +799,7 @@ export async function PUT(req) {
                 eventUser: entryUser,
                 eventLocation: eventLocation,
                 eventLogTime: now,
-                holdReason: holdReasonText, // Add hold reason to event
+                holdReason: holdReasonText,
               },
             },
           );
@@ -813,7 +813,7 @@ export async function PUT(req) {
             eventUser: [entryUser],
             eventLocation: [eventLocation],
             eventLogTime: [now],
-            holdReason: [holdReasonText], // Add hold reason to event
+            holdReason: [holdReasonText],
             remark: body.remarks || null,
             receiverName: body.consignee || body.customerName || null,
           });
@@ -828,7 +828,7 @@ export async function PUT(req) {
         console.error("❌ EventActivity error:", eventError);
       }
     } else {
-      console.log("ℹ️ Hold status unchanged - no event activity created");
+      console.log("ℹ️ No hold status change - skipping event activity");
     }
 
     // 7. Map update fields to shipment schema
@@ -841,7 +841,7 @@ export async function PUT(req) {
       return new Date(d);
     };
 
-    // Prepare update data with proper hold fields - FIXED
+    // Prepare update data with proper hold fields
     const updateData = {
       ...(body.source === "Portal" ? body : {}),
       // Always include these fields
@@ -919,13 +919,14 @@ export async function PUT(req) {
       coLoaderNumber: Number(body.coLoaderNumber || 0),
       origin: body.origin || "",
       forwarder: body.forwarder,
+      // Don't update eventCode for non-hold changes
       eventCode: isHold
         ? "HOLD"
         : previousHold !== isHold
           ? isHold
             ? "HOLD"
             : "RELEASED"
-          : "UPD",
+          : shipment.eventCode,
       insertUser: shipment.insertUser,
       updateUser: body.updateUser || "",
     };
